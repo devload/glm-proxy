@@ -32,7 +32,14 @@ dependencies {
 	implementation("io.micrometer:micrometer-tracing-bridge-otel")
 	implementation("io.opentelemetry:opentelemetry-exporter-otlp")
 	implementation("io.opentelemetry:opentelemetry-sdk")
+	implementation("io.opentelemetry:opentelemetry-api")
+	implementation("io.opentelemetry:opentelemetry-sdk-trace")
+	implementation("io.opentelemetry:opentelemetry-sdk-extension-autoconfigure")
+	implementation("io.opentelemetry:opentelemetry-exporter-common")
 	implementation("io.micrometer:micrometer-registry-prometheus")
+
+	// OpenTelemetry Instrumentation for WebFlux
+	implementation("io.opentelemetry.instrumentation:opentelemetry-reactor-3.1:2.1.0-alpha")
 
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
 	testImplementation("io.projectreactor:reactor-test")

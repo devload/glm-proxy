@@ -1,5 +1,7 @@
 package com.example.glmproxy
 
+import io.micrometer.tracing.Span
+import io.micrometer.tracing.Tracer
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.core.io.buffer.DataBuffer
@@ -25,14 +27,26 @@ class ProxyService(
     @Value("\${pii.masking.enabled:true}") private val piiMaskingEnabled: Boolean,
     @Value("\${pii.masking.max-size:5000}") private val piiMaskingMaxSize: Int,
     private val webClientBuilder: WebClient.Builder,
-    private val piiMaskingService: PIIMaskingService
+    private val piiMaskingService: PIIMaskingService,
+    private val tracer: Tracer
 ) {
 
     private val logger = LoggerFactory.getLogger(ProxyService::class.java)
+    private val objectMapper = ObjectMapper()
 
     fun proxyRequest(exchange: ServerWebExchange): Mono<Void> {
         val request = exchange.request
         val startTime = System.currentTimeMillis()
+
+        // OpenTelemetry Span 생성
+        val parentSpan = tracer.nextSpan()
+            .name("proxy_request")
+            .tag("http.method", request.method.name())
+            .tag("http.url", request.path.value())
+            .tag("component", "glm-proxy")
+            .tag("proxy.type", "anthropic-api")
+
+        parentSpan.start()
 
         // Request 정보 수집
         val path = request.path.pathWithinApplication().value()
@@ -50,12 +64,26 @@ class ProxyService(
 
                 // 요청에서 model 추출
                 val requestModel = try {
-                    val json = com.fasterxml.jackson.databind.ObjectMapper().readTree(bodyString)
+                    val json = objectMapper.readTree(bodyString)
                     json.path("model").asText("claude-sonnet-4-5-20250929")
                 } catch (e: Exception) {
                     logger.debug("Failed to extract model from request: {}", e.message)
                     "claude-sonnet-4-5-20250929"
                 }
+
+                // Span에 Request 정보 기록
+                parentSpan.tag("http.path", path)
+                parentSpan.tag("http.query", queryParams.toString())
+                parentSpan.tag("request.model", requestModel)
+                parentSpan.tag("request.body_size", bodyString.length.toString())
+
+                // Request body를 span event로 기록 (truncated)
+                val truncatedRequestBody = if (bodyString.length > 1000) {
+                    bodyString.take(1000) + "...(truncated)"
+                } else {
+                    bodyString
+                }
+                parentSpan.event("request_received")
 
                 // 로깅: Request 정보 (원본)
                 logger.info("=".repeat(80))
@@ -82,6 +110,9 @@ class ProxyService(
                 val bodySize = bodyString.length
                 val shouldUseOllama = piiMaskingEnabled && bodySize <= piiMaskingMaxSize
 
+                parentSpan.tag("pii.masking.enabled", piiMaskingEnabled.toString())
+                parentSpan.tag("pii.masking.should_process", shouldUseOllama.toString())
+
                 // SSE 응답 준비
                 val response = exchange.response
                 response.headers.contentType = MediaType.parseMediaType("text/event-stream")
@@ -94,79 +125,59 @@ class ProxyService(
                 // 표준 Anthropic SSE 이벤트 생성 함수들
                 // ============================================================
 
-                /**
-                 * 일반 SSE 이벤트 생성 헬퍼 (먼저 정의)
-                 */
                 fun createSSEEvent(event: String, data: String): DataBuffer {
                     val sseFormat = "event: $event\ndata: $data\n\n"
                     return bufferFactory.wrap(sseFormat.toByteArray(StandardCharsets.UTF_8))
                 }
 
-                /**
-                 * message_start 이벤트 생성 (실제 API 형식과 동일)
-                 */
                 fun createMessageStartEvent(messageId: String, role: String, model: String = "claude-sonnet-4-5-20250929"): DataBuffer {
-                    // 실제 Anthropic API 형식: content, model, stop_reason, stop_sequence, usage 필드 포함
                     val data = """{"type":"message_start","message":{"id":"$messageId","type":"message","role":"$role","content":[],"model":"$model","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":0,"output_tokens":0}}}"""
                     return createSSEEvent("message_start", data)
                 }
 
-                /**
-                 * content_block_start 이벤트 생성
-                 */
                 fun createContentBlockStartEvent(index: Int): DataBuffer {
                     val data = """{"type":"content_block_start","index":$index,"content_block":{"type":"text","text":""}}"""
                     return createSSEEvent("content_block_start", data)
                 }
 
-                /**
-                 * content_block_delta 이벤트 생성 (텍스트 전송)
-                 */
                 fun createContentBlockDeltaEvent(index: Int, text: String): DataBuffer {
                     val escapedText = text.replace("\n", "\\n").replace("\"", "\\\"")
                     val data = """{"type":"content_block_delta","index":$index,"delta":{"type":"text_delta","text":"$escapedText"}}"""
                     return createSSEEvent("content_block_delta", data)
                 }
 
-                /**
-                 * content_block_stop 이벤트 생성
-                 */
                 fun createContentBlockStopEvent(index: Int): DataBuffer {
                     val data = """{"type":"content_block_stop","index":$index}"""
                     return createSSEEvent("content_block_stop", data)
                 }
 
-                /**
-                 * message_delta 이벤트 생성
-                 */
                 fun createMessageDeltaEvent(stopReason: String = "end_turn"): DataBuffer {
                     val data = """{"type":"message_delta","delta":{"stop_reason":"$stopReason"},"usage":{"output_tokens":0}}"""
                     return createSSEEvent("message_delta", data)
                 }
 
-                /**
-                 * message_stop 이벤트 생성
-                 */
                 fun createMessageStopEvent(): DataBuffer {
                     val data = """{"type":"message_stop"}"""
                     return createSSEEvent("message_stop", data)
                 }
 
-                /**
-                 * API Response 이벤트를 content_block으로 변환
-                 * - message_start, message_delta, message_stop → content_block_delta로 변환
-                 * - content_block_start → content_block_delta로 변환 (새 블록 시작 알림)
-                 * - content_block_delta, content_block_stop → 그대로 통과
-                 */
+                // Response 데이터를 수집하기 위한 변수들
+                val responseCollector = StringBuilder()
+                var totalResponseBytes = 0
+
                 fun transformApiEventToContentBlock(buffer: DataBuffer): DataBuffer {
-                    // DataBuffer를 안전하게 byte array로 변환 (heap-based 여부와 무관)
                     val bytes = ByteArray(buffer.readableByteCount())
                     buffer.read(bytes)
-                    buffer.readPosition(0) // 읽기 위치 리셋
+                    buffer.readPosition(0)
                     val content = String(bytes, StandardCharsets.UTF_8)
-                    val lines = content.split("\n")
 
-                    // event 라인과 data 라인 추출
+                    // Response 데이터 수집 (truncated)
+                    totalResponseBytes += bytes.size
+                    if (responseCollector.length < 2000) {
+                        responseCollector.append(content)
+                    }
+
+                    val lines = content.split("\n")
                     val eventLine = lines.find { it.startsWith("event: ") }
                     val dataLine = lines.find { it.startsWith("data: ") }
 
@@ -174,54 +185,56 @@ class ProxyService(
                         val eventType = eventLine.removePrefix("event: ").trim()
                         val dataContent = dataLine.removePrefix("data: ").trim()
 
+                        // Span event로 각 SSE 이벤트 기록
+                        parentSpan.event("sse_event: $eventType")
+
                         return when (eventType) {
                             "message_start" -> {
-                                // message_start → content_block_delta로 변환
                                 try {
-                                    val jsonData = ObjectMapper().readTree(dataContent)
+                                    val jsonData = objectMapper.readTree(dataContent)
                                     val msgId = jsonData.path("message").path("id").asText("unknown")
-                                    val text = "📡 API Response 시작: $msgId\n"
+                                    parentSpan.tag("response.message_id", msgId)
+                                    val text = "API Response: $msgId\n"
                                     createContentBlockDeltaEvent(2, text)
                                 } catch (e: Exception) {
                                     logger.debug("Failed to parse message_start: {}", e.message)
-                                    createContentBlockDeltaEvent(2, "📡 API Response 시작\n")
+                                    createContentBlockDeltaEvent(2, "API Response\n")
                                 }
                             }
                             "content_block_start" -> {
-                                // content_block_start → content_block_delta로 변환
-                                val text = "📝 API Response 내용:\n"
+                                val text = "API Response:\n"
                                 createContentBlockDeltaEvent(2, text)
                             }
                             "message_delta" -> {
-                                // message_delta → content_block_delta로 변환
                                 try {
-                                    val jsonData = ObjectMapper().readTree(dataContent)
+                                    val jsonData = objectMapper.readTree(dataContent)
                                     val stopReason = jsonData.path("delta").path("stop_reason").asText("unknown")
                                     val outputTokens = jsonData.path("usage").path("output_tokens").asInt(-1)
+                                    parentSpan.tag("response.stop_reason", stopReason)
+                                    if (outputTokens > 0) {
+                                        parentSpan.tag("response.output_tokens", outputTokens.toString())
+                                    }
                                     val text = if (outputTokens > 0) {
-                                        "\n📊 API Response 종료: stop_reason=$stopReason, tokens=$outputTokens\n"
+                                        "\nAPI Response: stop_reason=$stopReason, tokens=$outputTokens\n"
                                     } else {
-                                        "\n📊 API Response 종료: stop_reason=$stopReason\n"
+                                        "\nAPI Response: stop_reason=$stopReason\n"
                                     }
                                     createContentBlockDeltaEvent(2, text)
                                 } catch (e: Exception) {
                                     logger.debug("Failed to parse message_delta: {}", e.message)
-                                    createContentBlockDeltaEvent(2, "\n📊 API Response 종료\n")
+                                    createContentBlockDeltaEvent(2, "\nAPI Response end\n")
                                 }
                             }
                             "message_stop" -> {
-                                // message_stop → content_block_delta로 변환
-                                val text = "✅ API Response 완료\n"
+                                val text = "API Response complete\n"
                                 createContentBlockDeltaEvent(2, text)
                             }
                             else -> {
-                                // content_block_delta, content_block_stop 이벤트들은 그대로 통과
                                 buffer
                             }
                         }
                     }
 
-                    // 파싱 실패시 원본 반환
                     return buffer
                 }
 
@@ -232,71 +245,60 @@ class ProxyService(
                     val maskingStartTime = System.currentTimeMillis()
                     val messageId = "msg_${System.currentTimeMillis()}_${(0..9999).random()}"
 
+                    // PII Masking Span 생성
+                    val maskingSpan = tracer.nextSpan(parentSpan)
+                        .name("pii_masking")
+                        .tag("masking.enabled", "true")
+                        .tag("masking.body_size", bodySize.toString())
+
+                    maskingSpan.start()
+
                     logger.info("=".repeat(80))
-                    logger.info("🔒 PII MASKING MODE ENABLED")
+                    logger.info("PII MASKING MODE ENABLED")
                     logger.info("=".repeat(80))
                     logger.info("Request size: {} bytes (threshold: {} bytes)", bodySize, piiMaskingMaxSize)
                     logger.info("Message ID: {}", messageId)
                     logger.info("Starting OLLAMA processing...")
                     logger.info("-".repeat(80))
 
-                    // ============================================================
-                    // 표준 Anthropic SSE 이벤트 순서로 스트림 구성
-                    // ============================================================
-                    //
-                    // 1. message_start (우리가 보냄)
-                    // 2. content_block_start (index: 0, 마스킹 시작)
-                    // 3. content_block_delta (index: 0, "🔒 개인정보 마스킹 중...")
-                    // 4. content_block_stop (index: 0)
-                    //    [OLLAMA 백그라운드 처리]
-                    // 5. content_block_start (index: 1, 마스킹 완료)
-                    // 6. content_block_delta (index: 1, "✅ 마스킹 완료...")
-                    // 7. content_block_stop (index: 1)
-                    //    [실제 Anthropic API 응답 스트림]
-                    // 8. message_delta
-                    // 9. message_stop
-                    // ============================================================
-
                     Mono.defer<Unit> {
-                        logger.debug("📡 Client subscribed to SSE stream")
-                        logger.debug("📋 Message ID: {}", messageId)
+                        logger.debug("Client subscribed to SSE stream")
+                        logger.debug("Message ID: {}", messageId)
                         Mono.just(Unit)
                     }.flatMapMany {
-                        // 1. message_start 이벤트 전송
-                        logger.debug("📤 Sending event 1: message_start")
                         Flux.just(createMessageStartEvent(messageId, "assistant", requestModel))
-                            .doOnNext { logger.debug("   ✅ message_start sent") }
-
-                            // 2. content_block_start (index: 0) - 마스킹 시작 블록
+                            .doOnNext { logger.debug("Sending event 1: message_start") }
                             .concatWith(
                                 Flux.just(createContentBlockStartEvent(0))
-                                    .doOnNext { logger.debug("📤 Sending event 2: content_block_start (index=0 - masking start block)") }
+                                    .doOnNext { logger.debug("Sending event 2: content_block_start (index=0)") }
                             )
-
-                            // 3. content_block_delta (index: 0) - 마스킹 시작 메시지
                             .concatWith(
-                                Flux.just(createContentBlockDeltaEvent(0, "🔒 개인정보 마스킹 중...\n"))
-                                    .doOnNext { logger.debug("📤 Sending event 3: content_block_delta (index=0 - masking start message)") }
+                                Flux.just(createContentBlockDeltaEvent(0, "PII masking in progress...\n"))
+                                    .doOnNext { logger.debug("Sending event 3: content_block_delta (index=0)") }
                             )
-
-                            // 4. content_block_stop (index: 0)
                             .concatWith(
                                 Flux.just(createContentBlockStopEvent(0))
-                                    .doOnNext { logger.debug("📤 Sending event 4: content_block_stop (index=0)") }
+                                    .doOnNext { logger.debug("Sending event 4: content_block_stop (index=0)") }
                             )
-
-                            // 백그라운드에서 OLLAMA 처리 및 다음 이벤트들
                             .concatWith(
                                 piiMaskingService.maskJson(bodyString)
                                     .subscribeOn(Schedulers.boundedElastic())
                                     .doOnSubscribe {
-                                        logger.debug("🔄 OLLAMA processing started in background")
+                                        logger.debug("OLLAMA processing started in background")
+                                        maskingSpan.event("ollama_processing_started")
                                     }
                                     .flatMapMany { maskedBody ->
                                         val maskingDuration = System.currentTimeMillis() - maskingStartTime
                                         val piiMaskingApplied = (maskedBody != bodyString)
 
-                                        logger.info("✅ OLLAMA processing completed")
+                                        // Masking span에 결과 기록
+                                        maskingSpan.tag("masking.duration_ms", maskingDuration.toString())
+                                        maskingSpan.tag("masking.applied", piiMaskingApplied.toString())
+                                        maskingSpan.tag("masking.masked_body_size", maskedBody.length.toString())
+                                        maskingSpan.event("ollama_processing_completed")
+                                        maskingSpan.end()
+
+                                        logger.info("OLLAMA processing completed")
                                         logger.info("   Duration: {}ms", maskingDuration)
                                         logger.info("   PII Masked: {}", piiMaskingApplied)
 
@@ -309,14 +311,18 @@ class ProxyService(
                                             logger.info("Body (Masked): {}", maskedLog)
                                         }
 
-                                        // 5. content_block_start (index: 1) - 마스킹 완료 블록
-                                        logger.debug("📤 Sending event 5: content_block_start (index=1 - masking complete block)")
+                                        // API Request Span 생성
+                                        val apiSpan = tracer.nextSpan(parentSpan)
+                                            .name("anthropic_api_request")
+                                            .tag("api.url", targetBaseUrl + path)
+                                            .tag("api.method", method.name())
 
-                                        // 6. content_block_delta (index: 1) - 마스킹 완료 메시지
-                                        val completeText = "✅ 마스킹 완료 (${maskingDuration}ms)\n\n"
-                                        logger.debug("📤 Sending event 6: content_block_delta (index=1 - masking complete message)")
+                                        apiSpan.start()
 
-                                        // API 요청 URL 구성
+                                        logger.debug("Sending event 5: content_block_start (index=1)")
+                                        val completeText = "Masking completed (${maskingDuration}ms)\n\n"
+                                        logger.debug("Sending event 6: content_block_delta (index=1)")
+
                                         val queryString = if (queryParams.isNotEmpty()) {
                                             queryParams.toSingleValueMap().map { "${it.key}=${it.value}" }.joinToString("&")
                                         } else {
@@ -324,15 +330,12 @@ class ProxyService(
                                         }
                                         val targetUrl = targetBaseUrl + path + if (queryString.isNotEmpty()) "?$queryString" else ""
 
-                                        logger.info("📡 Forwarding to API: {}", targetUrl)
+                                        logger.info("Forwarding to API: {}", targetUrl)
 
                                         val webClient = webClientBuilder.build()
 
-                                        // 7. content_block_stop (index: 1)
-                                        logger.debug("📤 Sending event 7: content_block_stop (index=1)")
-
-                                        // [실제 Anthropic API 응답 스트림]
-                                        logger.debug("📡 Starting API response streaming...")
+                                        logger.debug("Sending event 7: content_block_stop (index=1)")
+                                        logger.debug("Starting API response streaming...")
 
                                         val apiResponseFlux = webClient
                                             .method(method)
@@ -354,34 +357,51 @@ class ProxyService(
                                             .bodyToFlux(org.springframework.core.io.buffer.DataBuffer::class.java)
                                             .map { buffer -> transformApiEventToContentBlock(buffer) }
                                             .doOnSubscribe {
-                                                logger.debug("   ✅ API response subscription started")
+                                                logger.debug("API response subscription started")
+                                                apiSpan.event("api_response_started")
                                             }
                                             .doOnNext { buffer ->
-                                                logger.trace("   📦 API chunk: {} bytes", buffer.readableByteCount())
+                                                logger.trace("API chunk: {} bytes", buffer.readableByteCount())
                                             }
                                             .doOnComplete {
-                                                logger.info("✅ API response streaming completed")
+                                                logger.info("API response streaming completed")
+                                                apiSpan.tag("api.response_bytes", totalResponseBytes.toString())
+                                                apiSpan.event("api_response_completed")
+                                                apiSpan.end()
+
                                                 if (piiMaskingApplied) {
-                                                    logger.info("🔒 PII MASKING APPLIED: Personal information was masked")
+                                                    logger.info("PII MASKING APPLIED: Personal information was masked")
                                                 } else {
-                                                    logger.info("⚠️  PII MASKING NOT APPLIED: No sensitive data found")
+                                                    logger.info("PII MASKING NOT APPLIED: No sensitive data found")
                                                 }
                                             }
                                             .doOnError { error ->
-                                                logger.error("❌ API response error: {}", error.message)
+                                                logger.error("API response error: {}", error.message)
+                                                apiSpan.tag("api.error", error.message ?: "unknown")
+                                                apiSpan.error(error)
+                                                apiSpan.end()
                                             }
 
-                                        // 이벤트들을 순서대로 결합
                                         Flux.just(createContentBlockStartEvent(1))
                                             .concatWith(Flux.just(createContentBlockDeltaEvent(1, completeText)))
                                             .concatWith(Flux.just(createContentBlockStopEvent(1)))
                                             .concatWith(apiResponseFlux)
                                     }
                                     .onErrorResume { error ->
-                                        logger.error("❌ OLLAMA processing failed: {}", error.message)
+                                        logger.error("OLLAMA processing failed: {}", error.message)
+                                        maskingSpan.tag("masking.error", error.message ?: "unknown")
+                                        maskingSpan.error(error)
+                                        maskingSpan.end()
+
                                         // 실패 시 원본 데이터로 API 요청
+                                        val fallbackSpan = tracer.nextSpan(parentSpan)
+                                            .name("anthropic_api_request_fallback")
+                                            .tag("api.fallback", "true")
+
+                                        fallbackSpan.start()
+
                                         val targetUrl = targetBaseUrl + path
-                                        logger.info("📡 Forwarding original to API: {}", targetUrl)
+                                        logger.info("Forwarding original to API: {}", targetUrl)
 
                                         val webClient = webClientBuilder.build()
                                         webClient
@@ -404,41 +424,67 @@ class ProxyService(
                                             .bodyToFlux(org.springframework.core.io.buffer.DataBuffer::class.java)
                                             .map { buffer -> transformApiEventToContentBlock(buffer) }
                                             .doOnSubscribe {
-                                                logger.info("✅ Using original data (OLLAMA failed)")
+                                                logger.info("Using original data (OLLAMA failed)")
+                                            }
+                                            .doOnComplete {
+                                                fallbackSpan.end()
+                                            }
+                                            .doOnError { e ->
+                                                fallbackSpan.error(e)
+                                                fallbackSpan.end()
                                             }
                                     }
                             )
-
-                            // 8. message_delta 이벤트
                             .concatWith(
                                 Flux.just(createMessageDeltaEvent("end_turn"))
-                                    .doOnNext { logger.debug("📤 Sending event 8: message_delta") }
+                                    .doOnNext { logger.debug("Sending event 8: message_delta") }
                             )
-
-                            // 9. message_stop 이벤트
                             .concatWith(
                                 Flux.just(createMessageStopEvent())
-                                    .doOnNext { logger.debug("📤 Sending event 9: message_stop") }
+                                    .doOnNext { logger.debug("Sending event 9: message_stop") }
                             )
                             .doOnComplete {
                                 val totalDuration = System.currentTimeMillis() - startTime
                                 logger.info("=".repeat(80))
-                                logger.info("✅ STREAMING COMPLETED")
+                                logger.info("STREAMING COMPLETED")
                                 logger.info("Total duration: {}ms", totalDuration)
                                 logger.info("=".repeat(80))
                                 logger.info("")
+
+                                // Parent span 완료
+                                parentSpan.tag("http.status_code", "200")
+                                parentSpan.tag("proxy.duration_ms", totalDuration.toString())
+                                parentSpan.tag("response.total_bytes", totalResponseBytes.toString())
+                                parentSpan.event("streaming_completed")
+                                parentSpan.end()
+                            }
+                            .doOnError { error ->
+                                parentSpan.tag("http.status_code", "500")
+                                parentSpan.tag("error", error.message ?: "unknown")
+                                parentSpan.error(error)
+                                parentSpan.end()
                             }
                     }
                     .doOnSubscribe {
-                        logger.info("📡 SSE stream subscribed by client")
+                        logger.info("SSE stream subscribed by client")
+                        parentSpan.event("sse_stream_subscribed")
                     }
 
                 } else {
                     // 마스킹 없이 바로 API 요청 (순수 프록시)
+                    val apiSpan = tracer.nextSpan(parentSpan)
+                        .name("anthropic_api_request_direct")
+                        .tag("api.direct", "true")
+                        .tag("pii.masking.skipped_reason",
+                            if (!piiMaskingEnabled) "disabled"
+                            else "body_too_large")
+
+                    apiSpan.start()
+
                     if (piiMaskingEnabled && bodySize > piiMaskingMaxSize) {
-                        logger.info("⚠️  PII Masking ENABLED but size too large ({} bytes > {} bytes) - Skipping OLLAMA, using original", bodySize, piiMaskingMaxSize)
+                        logger.info("PII Masking ENABLED but size too large ({} bytes > {} bytes) - Skipping OLLAMA, using original", bodySize, piiMaskingMaxSize)
                     } else {
-                        logger.info("⚠️  PII Masking DISABLED - Pure proxy mode")
+                        logger.info("PII Masking DISABLED - Pure proxy mode")
                     }
 
                     val queryString = if (queryParams.isNotEmpty()) {
@@ -452,7 +498,6 @@ class ProxyService(
 
                     val webClient = webClientBuilder.build()
 
-                    // 순수 API 응답 스트림 반환 (이벤트 변환 적용)
                     webClient
                         .method(method)
                         .uri(targetUrl)
@@ -471,24 +516,45 @@ class ProxyService(
                         .bodyValue(bodyString)
                         .retrieve()
                         .bodyToFlux(org.springframework.core.io.buffer.DataBuffer::class.java)
-                        // PII 마스킹 비활성화 시 원본 그대로 전달 (이벤트 변환 안 함)
                         .doOnSubscribe {
                             logger.info("Streaming response from API...")
+                            apiSpan.event("api_streaming_started")
                         }
                         .doOnNext { buffer ->
+                            totalResponseBytes += buffer.readableByteCount()
                             logger.debug("Forwarding API response buffer ({} bytes)", buffer.readableByteCount())
                         }
                         .doOnComplete {
                             val endTime = System.currentTimeMillis()
                             val duration = endTime - startTime
-                            logger.info("✅ Response streaming completed (Duration: {}ms)", duration)
+                            logger.info("Response streaming completed (Duration: {}ms)", duration)
+
+                            apiSpan.tag("api.response_bytes", totalResponseBytes.toString())
+                            apiSpan.event("api_streaming_completed")
+                            apiSpan.end()
+
+                            parentSpan.tag("http.status_code", "200")
+                            parentSpan.tag("proxy.duration_ms", duration.toString())
+                            parentSpan.tag("response.total_bytes", totalResponseBytes.toString())
+                            parentSpan.event("proxy_completed")
+                            parentSpan.end()
+
                             if (piiMaskingEnabled && bodySize > piiMaskingMaxSize) {
-                                logger.info("⚠️  PII MASKING SKIPPED: Request too large ({} bytes), sent original data", bodySize)
+                                logger.info("PII MASKING SKIPPED: Request too large ({} bytes), sent original data", bodySize)
                             } else if (!piiMaskingEnabled) {
-                                logger.info("⚠️  PII MASKING DISABLED: Pure proxy mode, original data sent to API")
+                                logger.info("PII MASKING DISABLED: Pure proxy mode, original data sent to API")
                             }
                             logger.info("=".repeat(80))
                             logger.info("")
+                        }
+                        .doOnError { error ->
+                            apiSpan.tag("api.error", error.message ?: "unknown")
+                            apiSpan.error(error)
+                            apiSpan.end()
+
+                            parentSpan.tag("http.status_code", "500")
+                            parentSpan.error(error)
+                            parentSpan.end()
                         }
                 }
 
@@ -505,49 +571,47 @@ class ProxyService(
                         )
                     }
 
-                // 응답에 상태 코드 설정 후 스트림 전송
                 response.writeWith(errorHandledFlux)
             }
     }
 
-    /**
-     * 테스트용 엔드포인트:我们自己가 만든 SSE 이벤트들을 직접 전송
-     * Anthropic API를 거치지 않고 더미 응답을 생성
-     */
     fun sendTestEvents(exchange: ServerWebExchange): Mono<Void> {
         val response = exchange.response
         val bufferFactory = response.bufferFactory()
 
-        // 요청 바디 읽기 및 로깅
+        // Test span 생성
+        val testSpan = tracer.nextSpan()
+            .name("test_sse_events")
+            .tag("test.type", "sse_event_test")
+
+        testSpan.start()
+
         return exchange.request.body
             .next()
             .map { dataBuffer ->
                 val bytes = ByteArray(dataBuffer.readableByteCount())
                 dataBuffer.read(bytes)
                 val requestBody = String(bytes, StandardCharsets.UTF_8)
-                logger.info("🧪 Test endpoint - Request body: {}", requestBody.take(200))
+                logger.info("Test endpoint - Request body: {}", requestBody.take(200))
+                testSpan.tag("test.request_size", bytes.size.toString())
                 requestBody
             }
             .flatMap { requestBody ->
-                // 테스트용 더미 응답 생성
                 val messageId = "msg_test_${System.currentTimeMillis()}"
 
-                // 요청에서 model 추출
                 val model = try {
-                    val json = com.fasterxml.jackson.databind.ObjectMapper().readTree(requestBody)
+                    val json = objectMapper.readTree(requestBody)
                     json.path("model").asText("claude-sonnet-4-5-20250929")
                 } catch (e: Exception) {
                     "claude-sonnet-4-5-20250929"
                 }
 
-                // SSE 이벤트 생성 함수들 (proxyRequest 내부 함수와 동일)
                 fun createSSEEvent(event: String, data: String): DataBuffer {
                     val sseFormat = "event: $event\ndata: $data\n\n"
                     return bufferFactory.wrap(sseFormat.toByteArray(StandardCharsets.UTF_8))
                 }
 
                 fun createMessageStartEvent(): DataBuffer {
-                    // 실제 Anthropic API 형식과 동일하게 모든 필드 포함
                     val data = """{"type":"message_start","message":{"id":"$messageId","type":"message","role":"assistant","content":[],"model":"$model","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":0,"output_tokens":0}}}"""
                     return createSSEEvent("message_start", data)
                 }
@@ -578,56 +642,72 @@ class ProxyService(
                     return createSSEEvent("message_stop", data)
                 }
 
-                // 테스트용 응답 텍스트
                 val testResponse = """
-                    테스트 응답입니다!
+                    Test response!
 
-                    이 메시지는我们自己가 만든 SSE 이벤트를 통해 전송됩니다.
-                    Anthropic API를 거치지 않고 직접 생성되었습니다.
+                    This message is sent through our own SSE events.
+                    Generated directly without going through Anthropic API.
 
-                    확인할 내용:
-                    1. ✅ message_start 이벤트가 전송되었나요?
-                    2. ✅ content_block_start 이벤트가 전송되었나요?
-                    3. ✅ content_block_delta 이벤트들이 전송되었나요?
-                    4. ✅ content_block_stop 이벤트가 전송되었나요?
-                    5. ✅ message_delta 이벤트가 전송되었나요?
-                    6. ✅ message_stop 이벤트가 전송되었나요?
+                    Check items:
+                    1. message_start event sent?
+                    2. content_block_start event sent?
+                    3. content_block_delta events sent?
+                    4. content_block_stop event sent?
+                    5. message_delta event sent?
+                    6. message_stop event sent?
 
-                    이 모든 이벤트가 올바른 순서로 전송되면 CLAUDE CODE에서 정상적으로 표시됩니다.
+                    If all events are sent in correct order, it will display properly in CLAUDE CODE.
                 """.trimIndent()
 
-                // 응답 헤더 설정
                 response.headers.set("Content-Type", "text/event-stream")
                 response.headers.set("Cache-Control", "no-cache")
                 response.headers.set("Connection", "keep-alive")
 
-                // 이벤트 스트림 생성
                 val eventFlux = Mono.defer<Unit> {
-                    logger.info("🧪 Test endpoint called - sending dummy SSE events")
+                    logger.info("Test endpoint called - sending dummy SSE events")
+                    testSpan.event("test_started")
                     Mono.just(Unit)
                 }.flatMapMany {
-                    // 1. message_start
                     Flux.just(createMessageStartEvent())
-                        .doOnNext { logger.debug("📤 Test: message_start sent") }
-                        // 2. content_block_start
+                        .doOnNext {
+                            logger.debug("Test: message_start sent")
+                            testSpan.event("message_start_sent")
+                        }
                         .concatWith(Flux.just(createContentBlockStartEvent(0))
-                            .doOnNext { logger.debug("📤 Test: content_block_start sent") })
-                        // 3. content_block_delta (여러 번 - 텍스트를 청크로 나누어 전송)
+                            .doOnNext {
+                                logger.debug("Test: content_block_start sent")
+                                testSpan.event("content_block_start_sent")
+                            })
                         .concatWith(Flux.fromArray(testResponse.chunked(50).map { chunk ->
                             createContentBlockDeltaEvent(0, chunk + "\n")
                         }.toTypedArray())
-                            .doOnNext { logger.debug("📤 Test: content_block_delta sent") })
-                        // 4. content_block_stop
+                            .doOnNext { logger.debug("Test: content_block_delta sent") })
                         .concatWith(Flux.just(createContentBlockStopEvent(0))
-                            .doOnNext { logger.debug("📤 Test: content_block_stop sent") })
-                        // 5. message_delta
+                            .doOnNext {
+                                logger.debug("Test: content_block_stop sent")
+                                testSpan.event("content_block_stop_sent")
+                            })
                         .concatWith(Flux.just(createMessageDeltaEvent())
-                            .doOnNext { logger.debug("📤 Test: message_delta sent") })
-                        // 6. message_stop
+                            .doOnNext {
+                                logger.debug("Test: message_delta sent")
+                                testSpan.event("message_delta_sent")
+                            })
                         .concatWith(Flux.just(createMessageStopEvent())
-                            .doOnNext { logger.debug("📤 Test: message_stop sent") })
+                            .doOnNext {
+                                logger.debug("Test: message_stop sent")
+                                testSpan.event("message_stop_sent")
+                            })
                         .doOnComplete {
-                            logger.info("✅ Test: All events sent successfully")
+                            logger.info("Test: All events sent successfully")
+                            testSpan.tag("test.status", "success")
+                            testSpan.event("test_completed")
+                            testSpan.end()
+                        }
+                        .doOnError { error ->
+                            testSpan.tag("test.status", "failed")
+                            testSpan.tag("test.error", error.message ?: "unknown")
+                            testSpan.error(error)
+                            testSpan.end()
                         }
                 }
 

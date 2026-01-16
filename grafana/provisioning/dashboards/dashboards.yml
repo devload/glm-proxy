@@ -1,0 +1,14 @@
+# Grafana Dashboards Provider Configuration
+apiVersion: 1
+
+providers:
+  - name: 'GLM Proxy Dashboards'
+    orgId: 1
+    folder: 'GLM Proxy'
+    folderUid: 'glm-proxy'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards

@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Claude Code API 프록시 서버 만들어보기</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            line-height: 1.8;
+            color: #292929;
+            background: #fff;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-size: 2.5em;
+            font-weight: 700;
+            margin-bottom: 10px;
+            color: #000;
+        }
+
+        .subtitle {
+            font-size: 1.3em;
+            color: #757575;
+            margin-bottom: 40px;
+            font-style: italic;
+        }
+
+        h2 {
+            font-size: 1.8em;
+            font-weight: 700;
+            margin-top: 50px;
+            margin-bottom: 20px;
+            color: #000;
+            border-bottom: 1px solid #e0e0e0;
+            padding-bottom: 10px;
+        }
+
+        h3 {
+            font-size: 1.4em;
+            font-weight: 600;
+            margin-top: 35px;
+            margin-bottom: 15px;
+            color: #000;
+        }
+
+        p {
+            margin-bottom: 20px;
+            font-size: 1.1em;
+        }
+
+        strong {
+            font-weight: 600;
+        }
+
+        .highlight {
+            background: #f9f9f9;
+            border-left: 4px solid #1a8917;
+            padding: 15px 20px;
+            margin: 25px 0;
+            font-size: 1.1em;
+        }
+
+        pre {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 20px 0;
+            font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+            font-size: 0.9em;
+            line-height: 1.5;
+        }
+
+        code {
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        pre code {
+            background: none;
+            padding: 0;
+        }
+
+        ul, ol {
+            margin: 15px 0 20px 25px;
+        }
+
+        li {
+            margin-bottom: 8px;
+            font-size: 1.1em;
+        }
+
+        .diagram {
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 25px 0;
+            font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+            font-size: 0.85em;
+            line-height: 1.4;
+            overflow-x: auto;
+            white-space: pre;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 25px 0;
+        }
+
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        th {
+            background: #f5f5f5;
+            font-weight: 600;
+        }
+
+        .image-placeholder {
+            background: #f0f0f0;
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            margin: 25px 0;
+            color: #757575;
+        }
+
+        .section-divider {
+            border: none;
+            border-top: 1px solid #e0e0e0;
+            margin: 50px 0;
+        }
+
+        .footer {
+            margin-top: 50px;
+            padding-top: 30px;
+            border-top: 1px solid #e0e0e0;
+            color: #757575;
+        }
+
+        .tag {
+            display: inline-block;
+            background: #f0f0f0;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            margin-right: 8px;
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Claude Code API 프록시 서버 만들어보기</h1>
+<p class="subtitle">GLM을 써보려다 시작된 삽질의 기록</p>
+
+<hr class="section-divider">
+
+<h2>1. 시작은 호기심에서</h2>
+
+<h3>GLM을 Claude Code에서 써보려고 했습니다</h3>
+
+<p>요즘 Claude Code를 잘 쓰고 있는데, GLM(Generative Language Model)도 한번 써보고 싶었습니다. 찾아보니까 Claude Code에서 다른 API 서버를 쓸 수 있다고 하더라고요.</p>
+
+<p>설치 스크립트를 뜯어보니까 핵심은 간단했습니다. <code>~/.claude/settings.json</code> 파일에서 <code>ANTHROPIC_BASE_URL</code>을 수정하면 됩니다:</p>
+
+<pre><code>{
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://localhost:8080"
+  }
+}</code></pre>
+
+<p>이걸 보는 순간 생각이 들었습니다.</p>
+
+<div class="highlight">
+<strong>"이 URL을 내가 만든 서버로 바꾸면... 뭔가 재밌는 걸 할 수 있겠는데?"</strong>
+</div>
+
+<p>Claude Code가 API 서버로 뭘 보내는지 볼 수 있고, 중간에서 뭔가 처리도 할 수 있을 것 같았습니다.</p>
+
+<hr class="section-divider">
+
+<h2>2. 프록시 서버 만들기</h2>
+
+<h3>기본 구조</h3>
+
+<p>일단 간단한 프록시 서버를 만들어봤습니다. Spring Boot + WebFlux 조합으로요.</p>
+
+<div class="diagram">Claude Code → Proxy Server (localhost:8080) → 실제 API 서버</div>
+
+<h3>Request/Response 로깅</h3>
+
+<p>처음에는 단순히 로깅만 했습니다. Claude Code가 실제로 뭘 보내는지 궁금했으니까요.</p>
+
+<pre><code>logger.info("REQUEST INCOMING")
+logger.info("Method: {}", method)
+logger.info("Path: {}", path)
+logger.info("Body: {}", bodyString)</code></pre>
+
+<p>로그를 보니까 꽤 재밌었습니다. Claude Code가 어떤 형태로 요청을 보내는지, 어떤 헤더를 쓰는지 다 보였습니다.</p>
+
+<p><strong>내가 입력한 프롬프트가 어떻게 전송되는지도 볼 수 있었습니다.</strong> 예를 들어 "지금 너의 claude는 proxy를 통해서 체크중이야"라고 입력하면:</p>
+
+<pre><code>{
+  "model": "claude-sonnet-4-5-20250929",
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "지금 너의 claude는 proxy를 통해서 체크중이야"
+        }
+      ]
+    }
+  ],
+  "system": [
+    {
+      "type": "text",
+      "text": "You are Claude Code..."
+    }
+  ],
+  "max_tokens": 32000,
+  "stream": true
+}</code></pre>
+
+<p>내 입력이 <code>messages</code> 배열 안에 <code>role: "user"</code>로 들어가고, system prompt도 같이 전송되는 걸 확인할 수 있었습니다. 대화가 이어질수록 이전 메시지들이 계속 쌓여서 전송됩니다.</p>
+
+<p>실제로 찍힌 로그를 보면:</p>
+
+<pre><code>================================================================================
+REQUEST INCOMING
+Timestamp: 1768550012578
+Method: POST
+Path: /v1/messages
+Query: {beta=[true]}
+Headers:
+  accept: [application/json]
+  anthropic-beta: [interleaved-thinking-2025-05-14]
+  anthropic-version: [2023-06-01]
+  authorization: [Bearer ****]
+  content-type: [application/json]
+  user-agent: [claude-cli/2.1.9 (external, cli)]
+  x-app: [cli]
+  x-stainless-arch: [arm64]
+  x-stainless-os: [MacOS]
+  x-stainless-runtime: [node]
+Body (Original): {"model":"claude-sonnet-4-5-20250929","messages":[...],"stream":true}
+--------------------------------------------------------------------------------
+Forwarding to: https://api.anthropic.com/v1/messages?beta=true
+Streaming response from API...</code></pre>
+
+<p>여기서 알 수 있는 것들:</p>
+<ul>
+    <li><code>anthropic-beta</code>: Claude Code가 사용하는 베타 기능들</li>
+    <li><code>user-agent</code>: claude-cli 버전 정보 (2.1.9)</li>
+    <li><code>x-stainless-*</code>: Stainless SDK 관련 메타데이터 (Node.js 런타임, arm64 아키텍처 등)</li>
+    <li><code>stream: true</code>: SSE 스트리밍 응답을 요청한다는 것</li>
+</ul>
+
+<h3>SSE 스트리밍 처리</h3>
+
+<p>근데 문제가 있었습니다. Claude API는 Server-Sent Events(SSE)로 응답을 스트리밍합니다. 일반적인 HTTP 응답처럼 한 번에 오는 게 아니라, 이벤트 단위로 쪼개서 옵니다.</p>
+
+<p>로그를 분석해보니 <strong>Anthropic API의 표준 SSE 이벤트 순서</strong>가 있었습니다:</p>
+
+<pre><code>1. message_start       ← 메시지 시작, ID/모델 정보
+2. content_block_start ← 컨텐츠 블록 시작
+3. content_block_delta ← 실제 텍스트 (여러 번 반복)
+4. content_block_stop  ← 컨텐츠 블록 종료
+5. message_delta       ← stop_reason, 토큰 사용량
+6. message_stop        ← 메시지 종료</code></pre>
+
+<p>실제 응답 예시:</p>
+
+<pre><code>event: message_start
+data: {"type":"message_start","message":{"id":"msg_xxx","role":"assistant","model":"claude-sonnet-4-5-20250929"}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"안녕"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"하세요"}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":42}}
+
+event: message_stop
+data: {"type":"message_stop"}</code></pre>
+
+<p>이게 화면에는 어떻게 보이냐면:</p>
+
+<pre><code>[message_start]       → (화면 변화 없음, 내부적으로 메시지 시작)
+[content_block_start] → (화면 변화 없음, 텍스트 블록 준비)
+[content_block_delta] → 안녕
+[content_block_delta] → 안녕하세요
+[content_block_stop]  → (화면 변화 없음, 블록 완료)
+[message_delta]       → (화면 변화 없음, 토큰 사용량 등 메타데이터)
+[message_stop]        → (응답 완료)</code></pre>
+
+<p><code>content_block_delta</code>가 올 때마다 텍스트가 이어붙여지면서 실시간으로 타이핑되는 것처럼 보입니다. 이게 ChatGPT나 Claude 웹에서 글자가 하나씩 나타나는 효과의 원리입니다.</p>
+
+<h3>Request Body 포맷</h3>
+
+<p>Request도 정해진 포맷이 있습니다:</p>
+
+<pre><code>{
+  "model": "claude-sonnet-4-5-20250929",
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {"type": "text", "text": "사용자 입력"}
+      ]
+    }
+  ],
+  "system": [...],
+  "tools": [...],
+  "max_tokens": 32000,
+  "stream": true
+}</code></pre>
+
+<p><code>messages</code> 배열의 <code>content</code>에는 여러 타입이 올 수 있습니다:</p>
+<ul>
+    <li><code>text</code>: 일반 텍스트</li>
+    <li><code>thinking</code>: AI의 생각 추적 (Extended Thinking 기능)</li>
+    <li><code>tool_use</code>: 도구 사용 요청</li>
+    <li><code>tool_result</code>: 도구 실행 결과</li>
+    <li><code>image</code>: 이미지</li>
+</ul>
+
+<p>재밌는 발견은, <strong>Claude Code가 사용하는 Write, Bash, Read 같은 도구들도 전부 이 <code>tool_use</code> 타입으로 API에 전송된다</strong>는 것입니다. 사용자가 보는 <code>⏺ Bash(ls -la)</code> 같은 로그들이 실제로는 Request Body의 일부로 서버에 전송되는 데이터입니다.</p>
+
+<hr class="section-divider">
+
+<h2>3. [장난 1] PII 마스킹 기능 추가해보기</h2>
+
+<p>프록시가 잘 동작하니까 욕심이 생겼습니다. <strong>"요청 중에 개인정보가 있으면 마스킹해서 보내면 어떨까?"</strong></p>
+
+<h3>왜 PII 마스킹인가?</h3>
+
+<p>Claude Code로 작업하다 보면 코드에 실수로 개인정보가 포함될 수 있습니다:</p>
+<ul>
+    <li>API 키, 비밀번호</li>
+    <li>이메일 주소, 전화번호</li>
+    <li>주민등록번호, 카드번호</li>
+</ul>
+
+<p>이런 정보가 그대로 API 서버로 전송되는 게 찝찝했습니다.</p>
+
+<h3>Ollama 연동</h3>
+
+<p>로컬에서 돌릴 수 있는 LLM인 Ollama를 연동해봤습니다. 요청 본문을 Ollama에 보내서 개인정보를 감지하고 마스킹하는 방식입니다.</p>
+
+<pre><code>pii:
+  masking:
+    enabled: true
+    max-size: 5000  # 5KB 이하만 처리</code></pre>
+
+<h3>전체 동작 흐름</h3>
+
+<div class="diagram">┌─────────────────────────────────────────────────────────────────────────┐
+│                         PII 마스킹 흐름도                                  │
+└─────────────────────────────────────────────────────────────────────────┘
+
+  Claude Code                 Proxy Server                    Ollama
+      │                            │                            │
+      │  1. POST /v1/messages      │                            │
+      │  (원본 요청)                │                            │
+      │ ─────────────────────────► │                            │
+      │                            │                            │
+      │                            │  2. PII 마스킹 요청          │
+      │                            │ ─────────────────────────► │
+      │                            │                            │
+      │                            │     [Ollama 처리 중...]     │
+      │                            │     (약 200ms ~ 5초)        │
+      │                            │                            │
+      │                            │  3. 마스킹된 JSON 반환       │
+      │                            │ ◄───────────────────────── │
+      │                            │                            │
+      │                            │                       Anthropic API
+      │                            │  4. 마스킹된 요청 전달         │
+      │                            │ ─────────────────────────────────►
+      │                            │                                  │
+      │                            │  5. API 응답 (SSE 스트림)        │
+      │                            │ ◄─────────────────────────────────
+      │                            │
+      │  6. 응답 전달 (SSE)         │
+      │ ◄───────────────────────── │
+      │                            │</div>
+
+<h3>마스킹 예시</h3>
+
+<p><strong>Before (원본):</strong></p>
+<pre><code>{
+  "messages": [{
+    "content": "내 이메일은 hong@example.com이고 전화번호는 010-1234-5678이야"
+  }]
+}</code></pre>
+
+<p><strong>After (마스킹 후):</strong></p>
+<pre><code>{
+  "messages": [{
+    "content": "내 이메일은 [EMAIL]이고 전화번호는 [PHONE]이야"
+  }]
+}</code></pre>
+
+<h3>실제 서버 로그</h3>
+
+<pre><code>================================================================================
+PII MASKING MODE ENABLED
+================================================================================
+Request size: 1234 bytes (threshold: 5000 bytes)
+Message ID: msg_1768550012578_1234
+Starting OLLAMA processing...
+--------------------------------------------------------------------------------
+OLLAMA processing completed
+   Duration: 234ms
+   PII Masked: true
+Body (Masked): {"messages":[{"content":"내 이메일은 [EMAIL]이고..."}]}
+--------------------------------------------------------------------------------
+Forwarding to API: https://api.anthropic.com/v1/messages
+API response streaming completed
+PII MASKING APPLIED: Personal information was masked
+================================================================================</code></pre>
+
+<h3>크기 제한</h3>
+
+<p>다만 요청 크기가 크면 Ollama 처리 시간이 너무 오래 걸려서, 일정 크기 이상은 마스킹 없이 바로 전달하도록 했습니다.</p>
+
+<div class="diagram">┌───────────────────────────────────────────────────────────────┐
+│  요청 크기에 따른 처리 분기                                       │
+└───────────────────────────────────────────────────────────────┘
+
+                    요청 도착
+                        │
+                        ▼
+              ┌─────────────────┐
+              │ 크기 <= 5KB ?   │
+              └─────────────────┘
+                   │        │
+                  Yes       No
+                   │        │
+                   ▼        ▼
+          ┌────────────┐  ┌────────────┐
+          │ Ollama로   │  │ 마스킹 없이 │
+          │ PII 마스킹  │  │ 바로 전달   │
+          └────────────┘  └────────────┘
+                   │        │
+                   ▼        ▼
+              ┌─────────────────┐
+              │   API 서버로    │
+              │     전달        │
+              └─────────────────┘</div>
+
+<hr class="section-divider">
+
+<h2>4. [장난 2] 모니터링 환경 붙여보기</h2>
+
+<p>프록시가 잘 동작하는지, 어디서 시간이 오래 걸리는지 보고 싶었습니다. 분산 추적(Distributed Tracing)을 붙여보기로 했습니다.</p>
+
+<h3>Docker로 Jaeger 띄우기</h3>
+
+<p>Jaeger는 분산 추적 시스템입니다. Docker Compose로 간단하게 띄울 수 있습니다:</p>
+
+<pre><code>services:
+  jaeger:
+    image: jaegertracing/all-in-one:1.54
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "4318:4318"    # OTLP HTTP</code></pre>
+
+<pre><code>docker compose up -d jaeger</code></pre>
+
+<div class="image-placeholder">
+[Docker Desktop - Jaeger 컨테이너 실행 중]<br>
+screenshots/docker-jaeger.png
+</div>
+
+<h3>OpenTelemetry 연동</h3>
+
+<p>Spring Boot에 OpenTelemetry를 연동해서 Trace 데이터를 Jaeger로 보냅니다.</p>
+
+<pre><code>management:
+  tracing:
+    enabled: true
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      endpoint: http://localhost:4318/v1/traces</code></pre>
+
+<p>코드에서는 각 단계마다 Span을 만들어서 기록했습니다:</p>
+
+<pre><code>val parentSpan = tracer.nextSpan()
+    .name("proxy_request")
+    .tag("http.method", request.method.name())
+    .tag("request.model", requestModel)
+
+parentSpan.start()
+// ... 처리 ...
+parentSpan.end()</code></pre>
+
+<h3>Jaeger UI에서 확인</h3>
+
+<p>이제 Jaeger UI에서 요청 흐름을 볼 수 있습니다.</p>
+
+<div class="image-placeholder">
+[Jaeger Trace 목록]<br>
+screenshots/jaeger-traces.png
+</div>
+
+<p>각 Trace를 클릭하면 상세 정보를 볼 수 있습니다:</p>
+
+<div class="image-placeholder">
+[Jaeger Trace 상세]<br>
+screenshots/jaeger-trace-detail.png
+</div>
+
+<ul>
+    <li><code>proxy_request</code>: 전체 요청 처리</li>
+    <li><code>pii_masking</code>: PII 마스킹 처리 (활성화된 경우)</li>
+    <li><code>anthropic_api_request</code>: 실제 API 호출</li>
+</ul>
+
+<p>각 Span에서 태그로 기록한 정보들을 볼 수 있습니다:</p>
+<ul>
+    <li><code>api.direct</code>: true (마스킹 없이 직접 호출)</li>
+    <li><code>api.response_bytes</code>: 1633</li>
+    <li><code>pii.masking.skipped_reason</code>: disabled</li>
+</ul>
+
+<hr class="section-divider">
+
+<h2>5. 마무리</h2>
+
+<h3>이 실험의 의미: LLM을 모니터링하고 제어할 수 있습니다</h3>
+
+<p>이 프로젝트의 핵심은 단순한 프록시가 아닙니다. <strong>LLM을 모니터링하고 제어할 수 있다</strong>는 점입니다.</p>
+
+<div class="diagram">┌─────────────────────────────────────────────────────────────────────────┐
+│                      프록시가 할 수 있는 것들                              │
+└─────────────────────────────────────────────────────────────────────────┘
+
+  ┌──────────────┐      ┌──────────────┐      ┌──────────────┐
+  │   모니터링    │      │    제어      │      │    보호      │
+  └──────────────┘      └──────────────┘      └──────────────┘
+         │                     │                     │
+         ▼                     ▼                     ▼
+  ┌──────────────┐      ┌──────────────┐      ┌──────────────┐
+  │ • 요청/응답   │      │ • 요청 수정   │      │ • PII 마스킹  │
+  │   로깅       │      │ • 라우팅 변경  │      │ • 민감정보    │
+  │ • 사용량 추적 │      │ • 필터링      │      │   제거       │
+  │ • 성능 측정   │      │ • 캐싱       │      │ • 접근 제어   │
+  └──────────────┘      └──────────────┘      └──────────────┘</div>
+
+<h3>1. 모니터링: LLM이 어떻게 쓰이는지 볼 수 있습니다</h3>
+
+<p>프록시를 통해 실제로 확인할 수 있었던 것들:</p>
+
+<table>
+    <tr>
+        <th>항목</th>
+        <th>확인 가능한 정보</th>
+    </tr>
+    <tr>
+        <td><strong>요청 내용</strong></td>
+        <td>내가 입력한 프롬프트가 어떤 형태로 전송되는지</td>
+    </tr>
+    <tr>
+        <td><strong>응답 구조</strong></td>
+        <td>SSE 이벤트 순서, 스트리밍 방식</td>
+    </tr>
+    <tr>
+        <td><strong>도구 사용</strong></td>
+        <td>Write, Bash, Read 등 도구 호출 내역</td>
+    </tr>
+    <tr>
+        <td><strong>토큰 사용량</strong></td>
+        <td>input_tokens, output_tokens</td>
+    </tr>
+    <tr>
+        <td><strong>처리 시간</strong></td>
+        <td>각 단계별 소요 시간 (Jaeger로 시각화)</td>
+    </tr>
+</table>
+
+<h3>2. 제어: 요청을 가로채서 수정할 수 있습니다</h3>
+
+<p><strong>PII 마스킹</strong>이 대표적인 예입니다:</p>
+<ul>
+    <li>요청이 API 서버로 가기 전에 가로챔</li>
+    <li>개인정보(이메일, 전화번호 등)를 탐지</li>
+    <li>마스킹 처리 후 전달</li>
+</ul>
+
+<div class="diagram">원본: "내 이메일은 hong@example.com이야"
+     │
+     ▼ [프록시에서 가로채서 수정]
+     │
+전달: "내 이메일은 [EMAIL]이야"</div>
+
+<h3>3. 이 실험을 통해 알게 된 것들</h3>
+
+<p><strong>1. Claude Code의 내부 동작</strong></p>
+<ul>
+    <li><code>settings.json</code>의 <code>ANTHROPIC_BASE_URL</code>만 바꾸면 프록시 가능</li>
+    <li>모든 도구 사용(Write, Bash 등)이 API로 전송됨</li>
+    <li>SSE 스트리밍의 6단계 이벤트 순서</li>
+</ul>
+
+<p><strong>2. LLM API의 구조</strong></p>
+<ul>
+    <li>Request: JSON (messages, system, tools, metadata)</li>
+    <li>Response: Server-Sent Events 스트림</li>
+    <li>대화가 이어질수록 컨텍스트가 계속 쌓여서 전송됨</li>
+</ul>
+
+<p><strong>3. 모니터링의 중요성</strong></p>
+<ul>
+    <li>Jaeger로 요청 흐름을 시각화하니 병목 지점이 한눈에 보임</li>
+    <li>어디서 시간이 오래 걸리는지, 에러가 어디서 나는지 파악 가능</li>
+</ul>
+
+<h3>마치며</h3>
+
+<p>처음엔 그냥 GLM 써보려고 시작한 건데, <code>settings.json</code>을 보는 순간 "이걸 프록시하면 재밌겠다"는 생각이 들었습니다.</p>
+
+<p>결과적으로:</p>
+<ul>
+    <li><strong>LLM의 내부 동작</strong>을 직접 눈으로 확인할 수 있었고</li>
+    <li><strong>요청을 가로채서 수정</strong>하는 것도 가능하다는 걸 알았고</li>
+    <li><strong>모니터링 환경</strong>까지 붙여서 시각화할 수 있었습니다</li>
+</ul>
+
+<p>역시 삽질은 배우는 게 많습니다.</p>
+
+<hr class="section-divider">
+
+<div class="footer">
+    <p><strong>참고</strong></p>
+    <p>GitHub: <a href="https://github.com/devload/glm-proxy">https://github.com/devload/glm-proxy</a></p>
+    <p>Anthropic API Streaming 공식 문서: <a href="https://docs.anthropic.com/en/api/messages-streaming">https://docs.anthropic.com/en/api/messages-streaming</a></p>
+    <p>
+        <span class="tag">Spring Boot</span>
+        <span class="tag">Kotlin</span>
+        <span class="tag">WebFlux</span>
+        <span class="tag">OpenTelemetry</span>
+        <span class="tag">Jaeger</span>
+        <span class="tag">Docker</span>
+    </p>
+</div>
+
+</body>
+</html>

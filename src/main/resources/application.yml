@@ -1,13 +1,12 @@
 server:
   port: 8080
-  # IPv4만 사용
   address: 127.0.0.1
 
 # 대상 서버 URL 설정
 target:
   base-url: https://api.z.ai/api/anthropic
 
-# OLLAMA 설정 (개인정보 마스킹용)
+# Spring Boot 설정
 spring:
   application:
     name: glm-proxy
@@ -18,15 +17,13 @@ spring:
         options:
           model: qwen2.5
           temperature: 0.0
-        # 30초 타임아웃 설정
         timeout: 30s
 
 # PII 마스킹 설정
 pii:
   masking:
-    enabled: false  # 일시적으로 비활성화 (OLLAMA 연결 문제)
-    max-size: 5000  # 5KB 이하만 OLLAMA 처리, 그 이상은 원본 전달
-    # 마스킹할 필드 목록
+    enabled: false
+    max-size: 5000
     sensitive-fields:
       - authorization
       - token
@@ -43,10 +40,44 @@ pii:
       - file_path
       - filepath
 
+# 로깅 설정
 logging:
   level:
     com.example.glmproxy: DEBUG
     org.springframework.web: INFO
     org.springframework.ai: DEBUG
+    io.opentelemetry: DEBUG
+    io.micrometer: DEBUG
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+
+# OpenTelemetry & Tracing 설정
+management:
+  tracing:
+    enabled: true
+    sampling:
+      probability: 1.0  # 100% 추적 (개발 환경)
+  otlp:
+    tracing:
+      endpoint: http://localhost:4318/v1/traces
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,traces
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    tags:
+      application: ${spring.application.name}
+
+# OpenTelemetry OTLP Exporter 설정
+otel:
+  exporter:
+    otlp:
+      endpoint: http://localhost:4318
+      protocol: http/protobuf
+  service:
+    name: glm-proxy
+  traces:
+    exporter: otlp

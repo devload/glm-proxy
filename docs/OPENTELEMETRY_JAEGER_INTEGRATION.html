@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GLM Proxy - OpenTelemetry & Jaeger Integration Guide</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #1e40af;
+            --accent-color: #3b82f6;
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-color: #1e293b;
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+            --code-bg: #1e293b;
+            --success-color: #22c55e;
+            --warning-color: #f59e0b;
+            --error-color: #ef4444;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        header {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            padding: 3rem 0;
+            margin-bottom: 2rem;
+        }
+
+        header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .nav-links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        .nav-links a {
+            color: white;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            background: rgba(255,255,255,0.1);
+            border-radius: 0.5rem;
+            transition: background 0.3s;
+        }
+
+        .nav-links a:hover {
+            background: rgba(255,255,255,0.2);
+        }
+
+        section {
+            background: var(--card-bg);
+            border-radius: 1rem;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        h2 {
+            color: var(--primary-color);
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        h3 {
+            color: var(--secondary-color);
+            margin: 1.5rem 0 1rem 0;
+        }
+
+        .architecture-diagram {
+            background: var(--code-bg);
+            color: #e2e8f0;
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            line-height: 1.4;
+            white-space: pre;
+        }
+
+        .code-block {
+            background: var(--code-bg);
+            color: #e2e8f0;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            margin: 1rem 0;
+        }
+
+        .code-block code {
+            color: #e2e8f0;
+        }
+
+        .code-block .keyword {
+            color: #c084fc;
+        }
+
+        .code-block .string {
+            color: #86efac;
+        }
+
+        .code-block .comment {
+            color: #64748b;
+        }
+
+        .steps {
+            list-style: none;
+            counter-reset: step;
+        }
+
+        .steps li {
+            counter-increment: step;
+            padding: 1rem 1rem 1rem 3.5rem;
+            margin-bottom: 1rem;
+            background: var(--bg-color);
+            border-radius: 0.5rem;
+            position: relative;
+        }
+
+        .steps li::before {
+            content: counter(step);
+            position: absolute;
+            left: 1rem;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 2rem;
+            height: 2rem;
+            background: var(--primary-color);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+        }
+
+        th, td {
+            padding: 0.75rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            background: var(--bg-color);
+            font-weight: 600;
+            color: var(--secondary-color);
+        }
+
+        tr:hover {
+            background: var(--bg-color);
+        }
+
+        .tag {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            background: var(--accent-color);
+            color: white;
+            border-radius: 0.25rem;
+            font-size: 0.8rem;
+            margin-right: 0.5rem;
+        }
+
+        .tag.success {
+            background: var(--success-color);
+        }
+
+        .tag.warning {
+            background: var(--warning-color);
+        }
+
+        .tag.error {
+            background: var(--error-color);
+        }
+
+        .info-box {
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin: 1rem 0;
+        }
+
+        .info-box.tip {
+            background: #ecfdf5;
+            border-left: 4px solid var(--success-color);
+        }
+
+        .info-box.warning {
+            background: #fffbeb;
+            border-left: 4px solid var(--warning-color);
+        }
+
+        .info-box.note {
+            background: #eff6ff;
+            border-left: 4px solid var(--primary-color);
+        }
+
+        .span-tree {
+            font-family: 'Courier New', monospace;
+            background: var(--bg-color);
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .span-tree .span {
+            color: var(--primary-color);
+            font-weight: bold;
+        }
+
+        .span-tree .tag-key {
+            color: var(--secondary-color);
+        }
+
+        .span-tree .tag-value {
+            color: var(--success-color);
+        }
+
+        .quick-links {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+
+        .quick-link {
+            padding: 1rem;
+            background: var(--bg-color);
+            border-radius: 0.5rem;
+            text-decoration: none;
+            color: var(--text-color);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .quick-link:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        .quick-link .icon {
+            font-size: 1.5rem;
+        }
+
+        .port-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+        }
+
+        .port-item {
+            padding: 1rem;
+            background: var(--bg-color);
+            border-radius: 0.5rem;
+            border-left: 4px solid var(--primary-color);
+        }
+
+        .port-item .port {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+
+        .port-item .desc {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-muted);
+            border-top: 1px solid var(--border-color);
+            margin-top: 2rem;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+
+            header h1 {
+                font-size: 1.8rem;
+            }
+
+            section {
+                padding: 1.5rem;
+            }
+
+            .architecture-diagram {
+                font-size: 0.7rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>GLM Proxy</h1>
+            <p>OpenTelemetry & Jaeger Integration Guide</p>
+            <nav class="nav-links">
+                <a href="#architecture">Architecture</a>
+                <a href="#quick-start">Quick Start</a>
+                <a href="#configuration">Configuration</a>
+                <a href="#spans">Span Structure</a>
+                <a href="#data">Collected Data</a>
+                <a href="#troubleshooting">Troubleshooting</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <section id="architecture">
+            <h2>Architecture Overview</h2>
+            <p>GLM Proxy는 OpenTelemetry를 사용하여 분산 추적(Distributed Tracing)을 구현하고, Jaeger를 통해 Request/Response 데이터와 이벤트를 모니터링합니다.</p>
+
+            <div class="architecture-diagram">
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              GLM Proxy                                       │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │                          ProxyService                                │    │
+│  │                                                                      │    │
+│  │  ┌──────────────┐   ┌──────────────┐   ┌──────────────────────┐    │    │
+│  │  │ proxy_request│───│  pii_masking │───│ anthropic_api_request│    │    │
+│  │  │    (Span)    │   │    (Span)    │   │        (Span)        │    │    │
+│  │  └──────────────┘   └──────────────┘   └──────────────────────┘    │    │
+│  │         │                  │                      │                 │    │
+│  │         ▼                  ▼                      ▼                 │    │
+│  │     [Tags]            [Tags]               [Tags/Events]            │    │
+│  │   - http.method      - masking.duration   - api.response_bytes     │    │
+│  │   - request.model    - masking.applied    - sse_events             │    │
+│  │   - request.body_size                                               │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                    │                                         │
+│                                    │ OTLP HTTP (Port 4318)                   │
+│                                    ▼                                         │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                     │
+                                     ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              Jaeger                                          │
+│  ┌────────────────┐    ┌──────────────────┐    ┌───────────────────────┐   │
+│  │ OTLP Collector │────│  Span Storage    │────│      Jaeger UI        │   │
+│  │  (Port 4318)   │    │    (Memory)      │    │    (Port 16686)       │   │
+│  └────────────────┘    └──────────────────┘    └───────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────┘</div>
+
+            <h3>Components</h3>
+            <div class="quick-links">
+                <div class="quick-link">
+                    <span class="icon">🔍</span>
+                    <div>
+                        <strong>OpenTelemetry SDK</strong>
+                        <div style="font-size:0.8rem;color:var(--text-muted)">Trace 수집 및 전송</div>
+                    </div>
+                </div>
+                <div class="quick-link">
+                    <span class="icon">📊</span>
+                    <div>
+                        <strong>Jaeger</strong>
+                        <div style="font-size:0.8rem;color:var(--text-muted)">Trace 저장 및 조회</div>
+                    </div>
+                </div>
+                <div class="quick-link">
+                    <span class="icon">📈</span>
+                    <div>
+                        <strong>Prometheus</strong>
+                        <div style="font-size:0.8rem;color:var(--text-muted)">메트릭 수집 (선택)</div>
+                    </div>
+                </div>
+                <div class="quick-link">
+                    <span class="icon">📉</span>
+                    <div>
+                        <strong>Grafana</strong>
+                        <div style="font-size:0.8rem;color:var(--text-muted)">대시보드 (선택)</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="quick-start">
+            <h2>Quick Start</h2>
+
+            <h3>1. Start Monitoring Stack</h3>
+            <div class="code-block">
+<span class="comment"># Jaeger만 시작</span>
+docker compose up -d jaeger
+
+<span class="comment"># 또는 전체 스택 시작 (Jaeger + Prometheus + Grafana)</span>
+docker compose up -d
+
+<span class="comment"># 또는 스크립트 사용</span>
+./scripts/start-monitoring.sh</div>
+
+            <h3>2. Service URLs</h3>
+            <div class="port-list">
+                <div class="port-item">
+                    <div class="port">http://localhost:16686</div>
+                    <div class="desc">Jaeger UI - Trace 조회</div>
+                </div>
+                <div class="port-item">
+                    <div class="port">http://localhost:9090</div>
+                    <div class="desc">Prometheus - 메트릭 조회</div>
+                </div>
+                <div class="port-item">
+                    <div class="port">http://localhost:3000</div>
+                    <div class="desc">Grafana (admin/admin)</div>
+                </div>
+                <div class="port-item">
+                    <div class="port">http://localhost:4318</div>
+                    <div class="desc">OTLP HTTP Endpoint</div>
+                </div>
+            </div>
+
+            <h3>3. Start GLM Proxy</h3>
+            <div class="code-block">./gradlew bootRun</div>
+
+            <h3>4. View Traces</h3>
+            <ol class="steps">
+                <li>GLM Proxy로 API 요청 전송</li>
+                <li>Jaeger UI (http://localhost:16686) 접속</li>
+                <li>Service 드롭다운에서 "glm-proxy" 선택</li>
+                <li>"Find Traces" 클릭하여 trace 조회</li>
+            </ol>
+        </section>
+
+        <section id="configuration">
+            <h2>Configuration</h2>
+
+            <h3>application.yml</h3>
+            <div class="code-block">
+<span class="comment"># OpenTelemetry & Tracing 설정</span>
+<span class="keyword">management</span>:
+  <span class="keyword">tracing</span>:
+    <span class="keyword">enabled</span>: <span class="string">true</span>
+    <span class="keyword">sampling</span>:
+      <span class="keyword">probability</span>: <span class="string">1.0</span>  <span class="comment"># 100% 추적</span>
+  <span class="keyword">otlp</span>:
+    <span class="keyword">tracing</span>:
+      <span class="keyword">endpoint</span>: <span class="string">http://localhost:4318/v1/traces</span>
+
+<span class="comment"># OpenTelemetry OTLP Exporter</span>
+<span class="keyword">otel</span>:
+  <span class="keyword">exporter</span>:
+    <span class="keyword">otlp</span>:
+      <span class="keyword">endpoint</span>: <span class="string">http://localhost:4318</span>
+  <span class="keyword">service</span>:
+    <span class="keyword">name</span>: <span class="string">glm-proxy</span></div>
+
+            <h3>Dependencies (build.gradle.kts)</h3>
+            <div class="code-block">
+<span class="keyword">implementation</span>(<span class="string">"io.micrometer:micrometer-tracing-bridge-otel"</span>)
+<span class="keyword">implementation</span>(<span class="string">"io.opentelemetry:opentelemetry-exporter-otlp"</span>)
+<span class="keyword">implementation</span>(<span class="string">"io.opentelemetry:opentelemetry-sdk"</span>)
+<span class="keyword">implementation</span>(<span class="string">"io.opentelemetry:opentelemetry-api"</span>)
+<span class="keyword">implementation</span>(<span class="string">"io.micrometer:micrometer-registry-prometheus"</span>)</div>
+        </section>
+
+        <section id="spans">
+            <h2>Span Structure</h2>
+            <p>GLM Proxy에서 생성하는 Span 계층 구조입니다.</p>
+
+            <div class="span-tree">
+<span class="span">proxy_request</span> (Parent Span)
+├── <span class="tag-key">Tags:</span>
+│   ├── <span class="tag-key">http.method:</span> <span class="tag-value">POST</span>
+│   ├── <span class="tag-key">http.url:</span> <span class="tag-value">/v1/messages</span>
+│   ├── <span class="tag-key">request.model:</span> <span class="tag-value">claude-sonnet-4-5-20250929</span>
+│   ├── <span class="tag-key">request.body_size:</span> <span class="tag-value">1234</span>
+│   ├── <span class="tag-key">http.status_code:</span> <span class="tag-value">200</span>
+│   └── <span class="tag-key">proxy.duration_ms:</span> <span class="tag-value">5432</span>
+│
+├── <span class="tag-key">Events:</span>
+│   ├── request_received
+│   ├── sse_stream_subscribed
+│   ├── sse_event: message_start
+│   └── streaming_completed
+│
+├── <span class="span">pii_masking</span> (Child Span)
+│   ├── <span class="tag-key">masking.duration_ms:</span> <span class="tag-value">234</span>
+│   ├── <span class="tag-key">masking.applied:</span> <span class="tag-value">true</span>
+│   └── <span class="tag-key">Events:</span> ollama_processing_started, completed
+│
+└── <span class="span">anthropic_api_request</span> (Child Span)
+    ├── <span class="tag-key">api.url:</span> <span class="tag-value">https://api.anthropic.com/v1/messages</span>
+    ├── <span class="tag-key">api.response_bytes:</span> <span class="tag-value">8765</span>
+    └── <span class="tag-key">Events:</span> api_response_started, completed</div>
+        </section>
+
+        <section id="data">
+            <h2>Collected Data</h2>
+
+            <h3>Request Data</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tag</th>
+                        <th>Description</th>
+                        <th>Example</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>http.method</code></td>
+                        <td>HTTP 메소드</td>
+                        <td><span class="tag">POST</span></td>
+                    </tr>
+                    <tr>
+                        <td><code>http.url</code></td>
+                        <td>요청 URL</td>
+                        <td>/v1/messages</td>
+                    </tr>
+                    <tr>
+                        <td><code>request.model</code></td>
+                        <td>요청 모델</td>
+                        <td>claude-sonnet-4-5-20250929</td>
+                    </tr>
+                    <tr>
+                        <td><code>request.body_size</code></td>
+                        <td>요청 바디 크기</td>
+                        <td>1234 bytes</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>PII Masking Data</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tag</th>
+                        <th>Description</th>
+                        <th>Example</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>masking.enabled</code></td>
+                        <td>마스킹 활성화 여부</td>
+                        <td><span class="tag success">true</span></td>
+                    </tr>
+                    <tr>
+                        <td><code>masking.duration_ms</code></td>
+                        <td>마스킹 처리 시간</td>
+                        <td>234 ms</td>
+                    </tr>
+                    <tr>
+                        <td><code>masking.applied</code></td>
+                        <td>마스킹 적용 여부</td>
+                        <td><span class="tag success">true</span></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Response Data</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Tag</th>
+                        <th>Description</th>
+                        <th>Example</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>http.status_code</code></td>
+                        <td>HTTP 상태 코드</td>
+                        <td><span class="tag success">200</span></td>
+                    </tr>
+                    <tr>
+                        <td><code>response.message_id</code></td>
+                        <td>응답 메시지 ID</td>
+                        <td>msg_01...</td>
+                    </tr>
+                    <tr>
+                        <td><code>response.stop_reason</code></td>
+                        <td>종료 이유</td>
+                        <td>end_turn</td>
+                    </tr>
+                    <tr>
+                        <td><code>response.output_tokens</code></td>
+                        <td>출력 토큰 수</td>
+                        <td>42</td>
+                    </tr>
+                    <tr>
+                        <td><code>proxy.duration_ms</code></td>
+                        <td>총 처리 시간</td>
+                        <td>5432 ms</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>SSE Events</h3>
+            <p>모든 SSE 이벤트가 Span Event로 기록됩니다:</p>
+            <div style="display:flex;flex-wrap:wrap;gap:0.5rem;margin-top:1rem;">
+                <span class="tag">message_start</span>
+                <span class="tag">content_block_start</span>
+                <span class="tag">content_block_delta</span>
+                <span class="tag">content_block_stop</span>
+                <span class="tag">message_delta</span>
+                <span class="tag">message_stop</span>
+            </div>
+        </section>
+
+        <section id="troubleshooting">
+            <h2>Troubleshooting</h2>
+
+            <h3>Trace가 Jaeger에 나타나지 않음</h3>
+            <div class="info-box note">
+                <strong>1. Jaeger 실행 확인</strong>
+                <div class="code-block">docker compose ps
+curl http://localhost:16686/api/services</div>
+            </div>
+
+            <div class="info-box note">
+                <strong>2. OTLP 엔드포인트 확인</strong>
+                <div class="code-block">curl -v http://localhost:4318/v1/traces</div>
+            </div>
+
+            <div class="info-box note">
+                <strong>3. 로그 확인</strong>
+                <div class="code-block">docker compose logs jaeger</div>
+            </div>
+
+            <h3>Trace가 끊어져 보임</h3>
+            <div class="info-box warning">
+                <strong>Context 전파 확인</strong>
+                <p>비동기 처리에서 <code>tracer.nextSpan(parentSpan)</code>을 사용하여 parent-child 관계를 명시적으로 설정해야 합니다.</p>
+            </div>
+
+            <h3>메모리 사용량 증가</h3>
+            <div class="info-box tip">
+                <strong>운영 환경 권장사항</strong>
+                <p>개발 환경에서는 메모리 저장소를 사용합니다. 운영 환경에서는 Elasticsearch 등 외부 저장소 사용을 권장합니다.</p>
+                <div class="code-block"><span class="comment"># docker-compose.yml</span>
+environment:
+  - SPAN_STORAGE_TYPE=elasticsearch
+  - ES_SERVER_URLS=http://elasticsearch:9200</div>
+            </div>
+        </section>
+
+        <section>
+            <h2>Related Documentation</h2>
+            <div class="quick-links">
+                <a href="https://opentelemetry.io/docs/" class="quick-link" target="_blank">
+                    <span class="icon">📚</span>
+                    <div>OpenTelemetry Docs</div>
+                </a>
+                <a href="https://www.jaegertracing.io/docs/" class="quick-link" target="_blank">
+                    <span class="icon">📖</span>
+                    <div>Jaeger Docs</div>
+                </a>
+                <a href="https://docs.spring.io/spring-boot/docs/current/reference/html/actuator.html#actuator.observability" class="quick-link" target="_blank">
+                    <span class="icon">🍃</span>
+                    <div>Spring Boot Observability</div>
+                </a>
+                <a href="https://micrometer.io/docs/tracing" class="quick-link" target="_blank">
+                    <span class="icon">📊</span>
+                    <div>Micrometer Tracing</div>
+                </a>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>GLM Proxy - OpenTelemetry & Jaeger Integration</p>
+        <p style="font-size:0.9rem;margin-top:0.5rem;">Generated: 2026-01-16</p>
+    </footer>
+</body>
+</html>
