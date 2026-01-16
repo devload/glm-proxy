@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CLAUDE CODE API 데이터 포맷 및 카테고리 분석</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+
+        h1 {
+            color: #2c3e50;
+            border-bottom: 4px solid #667eea;
+            padding-bottom: 15px;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+
+        h2 {
+            color: #34495e;
+            margin-top: 50px;
+            margin-bottom: 25px;
+            padding-left: 15px;
+            border-left: 5px solid #667eea;
+            font-size: 1.8em;
+        }
+
+        h3 {
+            color: #555;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            font-size: 1.4em;
+        }
+
+        .category-tree {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px;
+            border-radius: 12px;
+            margin: 30px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+            line-height: 2;
+        }
+
+        .category-tree .emoji {
+            font-size: 24px;
+            margin-right: 10px;
+        }
+
+        .code-block {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 25px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 20px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .code-block .key {
+            color: #9cdcfe;
+        }
+
+        .code-block .string {
+            color: #ce9178;
+        }
+
+        .code-block .number {
+            color: #b5cea8;
+        }
+
+        .code-block .boolean {
+            color: #569cd6;
+        }
+
+        .code-block .comment {
+            color: #6a9955;
+        }
+
+        .code-block .event {
+            color: #4ec9b0;
+            font-weight: bold;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 25px 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            text-align: left;
+            font-weight: bold;
+        }
+
+        td {
+            padding: 12px 15px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        tr:hover {
+            background: #f5f5f5;
+        }
+
+        .sensitivity-high {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+
+        .sensitivity-medium {
+            color: #f39c12;
+            font-weight: bold;
+        }
+
+        .sensitivity-low {
+            color: #27ae60;
+            font-weight: bold;
+        }
+
+        .category-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: bold;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+
+        .category-auth { background: #e74c3c; color: white; }
+        .category-client { background: #3498db; color: white; }
+        .category-feature { background: #9b59b6; color: white; }
+        .category-performance { background: #1abc9c; color: white; }
+        .category-model { background: #e67e22; color: white; }
+        .category-content { background: #2ecc71; color: white; }
+        .category-metadata { background: #34495e; color: white; }
+        .category-tools { background: #f39c12; color: white; }
+
+        .info-box {
+            background: #d5f4e6;
+            border-left: 5px solid #27ae60;
+            padding: 20px;
+            margin: 25px 0;
+            border-radius: 6px;
+        }
+
+        .warning-box {
+            background: #ffeaa7;
+            border-left: 5px solid #fdcb6e;
+            padding: 20px;
+            margin: 25px 0;
+            border-radius: 6px;
+        }
+
+        .section {
+            margin: 40px 0;
+            padding: 25px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .format-box {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 5px solid #667eea;
+            margin: 15px 0;
+        }
+
+        .data-flow {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            margin: 30px 0;
+            padding: 30px;
+            background: #ecf0f1;
+            border-radius: 10px;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .flow-step {
+            background: white;
+            padding: 20px 30px;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            min-width: 200px;
+        }
+
+        .flow-step h4 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .flow-arrow {
+            font-size: 30px;
+            color: #7f8c8d;
+        }
+
+        .priority-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .priority-list li {
+            padding: 15px;
+            margin: 10px 0;
+            background: white;
+            border-radius: 6px;
+            border-left: 4px solid #667eea;
+            display: flex;
+            align-items: center;
+        }
+
+        .priority-number {
+            background: #667eea;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 15px;
+            font-weight: bold;
+        }
+
+        .conclusion {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            margin: 40px 0;
+        }
+
+        .conclusion h3 {
+            color: white;
+            border-bottom: 2px solid rgba(255,255,255,0.3);
+            padding-bottom: 10px;
+        }
+
+        .conclusion ul {
+            margin-top: 20px;
+        }
+
+        .conclusion li {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+
+        .tag {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-left: 8px;
+        }
+
+        .tag-red { background: #e74c3c; color: white; }
+        .tag-yellow { background: #f39c12; color: white; }
+        .tag-green { background: #27ae60; color: white; }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+
+            h1 {
+                font-size: 1.8em;
+            }
+
+            .data-flow {
+                flex-direction: column;
+            }
+
+            .flow-arrow {
+                transform: rotate(90deg);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 CLAUDE CODE API 데이터 포맷 및 카테고리 분석</h1>
+
+        <div class="info-box">
+            <strong>📋 개요:</strong> 본 문서는 Proxy 서버를 통해 수집된 실제 API 요청/응답 데이터를 분석하여 데이터 포맷과 카테고리를 체계화한다.
+        </div>
+
+        <h2>🗂️ 데이터 카테고리 구조</h2>
+
+        <div class="category-tree">
+            <div><span class="emoji">📦</span> API 데이터</div>
+            <div style="margin-left: 30px;">
+                <div><span class="emoji">🔐</span> 인증/보안 (Authentication & Security)</div>
+                <div><span class="emoji">📋</span> 메타데이터 (Metadata)</div>
+                <div><span class="emoji">💬</span> 대화 컨텐츠 (Conversation Content)</div>
+                <div><span class="emoji">⚙️</span> 시스템 설정 (System Configuration)</div>
+                <div><span class="emoji">📊</span> 성능/테크닉 (Performance & Technical)</div>
+                <div><span class="emoji">🎤</span> 기능/기능 플래그 (Features & Flags)</div>
+            </div>
+        </div>
+
+        <h2>1️⃣ REQUEST 데이터 분석</h2>
+
+        <div class="section">
+            <h3>1.1 HTTP 레벨 데이터 - 헤더 (Headers)</h3>
+
+            <div class="format-box">
+                <h4>🔐 인증/보안 <span class="tag tag-red">높은 민감도</span></h4>
+                <div class="code-block">
+<span class="key">Authorization:</span> Bearer 53908b64385d4fb2a57aeea1720a4dac.1PfEj3H38GWVv20h
+                </div>
+                <ul>
+                    <li><strong>포맷:</strong> <code>Bearer &lt;token&gt;</code></li>
+                    <li><strong>용도:</strong> API 인증</li>
+                    <li><strong>민감도:</strong> <span class="sensitivity-high">⚠️ 높음 (마스킹 필요)</span></li>
+                </ul>
+            </div>
+
+            <div class="format-box">
+                <h4>📋 클라이언트 정보 (Client Metadata)</h4>
+                <div class="code-block">
+<span class="key">User-Agent:</span> claude-cli/2.1.2 (external, cli)
+<span class="key">x-app:</span> cli
+<span class="key">x-stainless-arch:</span> arm64
+<span class="key">x-stainless-lang:</span> js
+<span class="key">x-stainless-os:</span> MacOS
+<span class="key">x-stainless-runtime:</span> node
+<span class="key">x-stainless-runtime-version:</span> v24.3.0
+<span class="key">x-stainless-package-version:</span> 0.70.0
+                </div>
+                <ul>
+                    <li><strong>User-Agent:</strong> 버전 문자열</li>
+                    <li><strong>x-app:</strong> 앱 유형 ("cli")</li>
+                    <li><strong>x-stainless-arch:</strong> 아키텍처 ("arm64", "x64")</li>
+                    <li><strong>x-stainless-os:</strong> 운영체제 ("MacOS", "Windows", "Linux")</li>
+                    <li><strong>x-stainless-runtime:</strong> 런타임 환경 ("node", "browser")</li>
+                </ul>
+            </div>
+
+            <div class="format-box">
+                <h4>🎤 기능 플래그 (Feature Flags)</h4>
+                <div class="code-block">
+<span class="key">anthropic-version:</span> 2023-06-01
+<span class="key">anthropic-beta:</span> claude-code-20250219,interleaved-thinking-2025-05-14
+<span class="key">anthropic-dangerous-direct-browser-access:</span> true
+<span class="key">x-stainless-helper-method:</span> stream
+                </div>
+                <ul>
+                    <li><strong>anthropic-version:</strong> 날짜 형식 (YYYY-MM-DD)</li>
+                    <li><strong>anthropic-beta:</strong> 쉼표로 구분된 기능 이름</li>
+                    <li><strong>anthropic-dangerous-direct-browser-access:</strong> boolean</li>
+                </ul>
+            </div>
+
+            <div class="format-box">
+                <h4>📊 성능/테크닉 (Performance & Technical)</h4>
+                <div class="code-block">
+<span class="key">x-stainless-timeout:</span> 3000
+<span class="key">x-stainless-retry-count:</span> 0
+<span class="key">Connection:</span> keep-alive
+<span class="key">Accept-Encoding:</span> gzip, deflate, br, zstd
+                </div>
+                <ul>
+                    <li><strong>x-stainless-timeout:</strong> milliseconds (숫자)</li>
+                    <li><strong>x-stainless-retry-count:</strong> 재시도 횟수 (숫자)</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>1.2 Request Body 데이터 (JSON)</h3>
+
+            <div class="format-box">
+                <h4>⚙️ 모델 설정 (Model Configuration)</h4>
+                <div class="code-block">
+{
+  <span class="key">"model"</span>: <span class="string">"claude-haiku-4-5-20251001"</span>,
+  <span class="key">"max_tokens"</span>: <span class="number">32000</span>,
+  <span class="key">"stream"</span>: <span class="boolean">true</span>
+}
+                </div>
+                <ul>
+                    <li><strong>model:</strong> 문자열 (식별자) - 패턴: <code>claude-{모델명}-{버전}</code></li>
+                    <li><strong>max_tokens:</strong> 정수 (0 ~ 32000)</li>
+                    <li><strong>stream:</strong> 불리언 (true/false)</li>
+                </ul>
+            </div>
+
+            <div class="format-box">
+                <h4>💬 대화 컨텐츠 (Conversation Content)</h4>
+                <div class="code-block">
+{
+  <span class="key">"messages"</span>: [
+    {
+      <span class="key">"role"</span>: <span class="string">"user"</span>,
+      <span class="key">"content"</span>: [
+        {
+          <span class="key">"type"</span>: <span class="string">"text"</span>,
+          <span class="key">"text"</span>: <span class="string">"지금 너의 claude는 proxy를 통해서 체크중이야"</span>
+        }
+      ]
+    }
+  ]
+}
+                </div>
+                <p><strong>컨텐츠 타입:</strong></p>
+                <table>
+                    <tr>
+                        <th>타입</th>
+                        <th>설명</th>
+                        <th>데이터 포맷</th>
+                    </tr>
+                    <tr>
+                        <td><code>text</code></td>
+                        <td>일반 텍스트</td>
+                        <td>string</td>
+                    </tr>
+                    <tr>
+                        <td><code>thinking</code></td>
+                        <td>생각 추적</td>
+                        <td>{thinking: string, signature: string}</td>
+                    </tr>
+                    <tr>
+                        <td><code>tool_use</code></td>
+                        <td>도구 사용</td>
+                        <td>{id: string, name: string, input: object}</td>
+                    </tr>
+                    <tr>
+                        <td><code>tool_result</code></td>
+                        <td>도구 결과</td>
+                        <td>{tool_use_id: string, content: array}</td>
+                    </tr>
+                    <tr>
+                        <td><code>image</code></td>
+                        <td>이미지</td>
+                        <td>{type: "image", source: {...}}</td>
+                    </tr>
+                </table>
+
+                <p style="margin-top: 15px;"><strong>role 타입:</strong></p>
+                <ul>
+                    <li><code>user</code>: 사용자 입력</li>
+                    <li><code>assistant</code>: AI 응답</li>
+                    <li><code>system</code>: 시스템 프롬프트</li>
+                </ul>
+            </div>
+
+            <div class="format-box">
+                <h4>📋 메타데이터 (Metadata)</h4>
+                <div class="code-block">
+{
+  <span class="key">"metadata"</span>: {
+    <span class="key">"user_id"</span>: <span class="string">"user_9911...session_c1cd..."</span>
+  }
+}
+                </div>
+                <ul>
+                    <li><strong>포맷:</strong> 키-값 쌍</li>
+                    <li><strong>데이터 구조:</strong> <code>{계정ID}_session_{세션ID}</code></li>
+                </ul>
+            </div>
+        </div>
+
+        <h2>2️⃣ RESPONSE 데이터 분석 (Server-Sent Events)</h2>
+
+        <div class="section">
+            <h3>Response 포맷</h3>
+            <div class="code-block">
+<span class="key">Content-Type:</span> text/event-stream; charset=utf-8
+<span class="key">Transfer-Encoding:</span> chunked
+            </div>
+
+            <h4 style="margin-top: 30px;">이벤트 타입별 카테고리</h4>
+
+            <div class="format-box">
+                <h4>📦 메시지 라이프사이클 (Message Lifecycle)</h4>
+
+                <p><strong>message_start</strong></p>
+                <div class="code-block">
+<span class="event">event:</span> message_start
+<span class="key">data:</span> {
+  <span class="key">"type"</span>: <span class="string">"message_start"</span>,
+  <span class="key">"message"</span>: {
+    <span class="key">"id"</span>: <span class="string">"msg_20260116084723bc184d1424ba4056"</span>,
+    <span class="key">"type"</span>: <span class="string">"message"</span>,
+    <span class="key">"role"</span>: <span class="string">"assistant"</span>,
+    <span class="key">"model"</span>: <span class="string">"glm-4.5-air"</span>,
+    <span class="key">"content"</span>: [],
+    <span class="key">"stop_reason"</span>: <span class="boolean">null</span>,
+    <span class="key">"usage"</span>: {
+      <span class="key">"input_tokens"</span>: <span class="number">0</span>,
+      <span class="key">"output_tokens"</span>: <span class="number">0</span>
+    }
+  }
+}
+                </div>
+
+                <p style="margin-top: 20px;"><strong>message_stop</strong></p>
+                <div class="code-block">
+<span class="event">event:</span> message_stop
+<span class="key">data:</span> {<span class="key">"type"</span>: <span class="string">"message_stop"</span>}
+                </div>
+            </div>
+
+            <div class="format-box">
+                <h4>💬 컨텐츠 블록 (Content Blocks)</h4>
+
+                <p><strong>content_block_start</strong></p>
+                <div class="code-block">
+<span class="event">event:</span> content_block_start
+<span class="key">data:</span> {
+  <span class="key">"type"</span>: <span class="string">"content_block_start"</span>,
+  <span class="key">"index"</span>: <span class="number">0</span>,
+  <span class="key">"content_block"</span>: {
+    <span class="key">"type"</span>: <span class="string">"text"</span>,
+    <span class="key">"text"</span>: <span class="string">""</span>
+  }
+}
+                </div>
+
+                <p style="margin-top: 20px;"><strong>content_block_delta</strong> (스트리밍)</p>
+                <div class="code-block">
+<span class="event">event:</span> content_block_delta
+<span class="key">data:</span> {
+  <span class="key">"type"</span>: <span class="string">"content_block_delta"</span>,
+  <span class="key">"index"</span>: <span class="number">0</span>,
+  <span class="key">"delta"</span>: {
+    <span class="key">"type"</span>: <span class="string">"text_delta"</span>,
+    <span class="key">"text"</span>: <span class="string">"네, 정확합니다!"</span>
+  }
+}
+                </div>
+
+                <p style="margin-top: 20px;"><strong>content_block_stop</strong></p>
+                <div class="code-block">
+<span class="event">event:</span> content_block_stop
+<span class="key">data:</span> {
+  <span class="key">"type"</span>: <span class="string">"content_block_stop"</span>,
+  <span class="key">"index"</span>: <span class="number">0</span>
+}
+                </div>
+            </div>
+
+            <div class="format-box">
+                <h4>📊 메타데이터/사용량 (Metadata & Usage)</h4>
+                <div class="code-block">
+<span class="event">event:</span> message_delta
+<span class="key">data:</span> {
+  <span class="key">"type"</span>: <span class="string">"message_delta"</span>,
+  <span class="key">"delta"</span>: {
+    <span class="key">"stop_reason"</span>: <span class="string">"end_turn"</span>,
+    <span class="key">"stop_sequence"</span>: <span class="boolean">null</span>
+  },
+  <span class="key">"usage"</span>: {
+    <span class="key">"input_tokens"</span>: <span class="number">53</span>,
+    <span class="key">"output_tokens"</span>: <span class="number">40</span>,
+    <span class="key">"cache_read_input_tokens"</span>: <span class="number">163</span>,
+    <span class="key">"server_tool_use"</span>: {
+      <span class="key">"web_search_requests"</span>: <span class="number">0</span>
+    },
+    <span class="key">"service_tier"</span>: <span class="string">"standard"</span>
+  }
+}
+                </div>
+
+                <p style="margin-top: 15px;"><strong>stop_reason 타입:</strong></p>
+                <ul>
+                    <li><code>"end_turn"</code>: 정상 완료</li>
+                    <li><code>"max_tokens"</code>: 토큰 한도 도달</li>
+                    <li><code>"stop_sequence"</code>: 중지 시퀀스 감지</li>
+                    <li><code>"tool_use"</code>: 도구 사용</li>
+                </ul>
+            </div>
+        </div>
+
+        <h2>📊 데이터 카테고리 매핑 테이블</h2>
+
+        <h3>Request 데이터 카테고리</h3>
+        <table>
+            <tr>
+                <th>카테고리</th>
+                <th>데이터 필드</th>
+                <th>타입</th>
+                <th>예시</th>
+                <th>민감도</th>
+            </tr>
+            <tr>
+                <td>🔐 인증</td>
+                <td>Authorization</td>
+                <td>string</td>
+                <td><code>Bearer xxx...</code></td>
+                <td><span class="sensitivity-high">높음</span></td>
+            </tr>
+            <tr>
+                <td>📋 클라이언트 정보</td>
+                <td>User-Agent, x-app, x-stainless-*</td>
+                <td>string</td>
+                <td><code>claude-cli/2.1.2</code></td>
+                <td><span class="sensitivity-medium">보통</span></td>
+            </tr>
+            <tr>
+                <td>🎤 기능 플래그</td>
+                <td>anthropic-beta, anthropic-version</td>
+                <td>string, list</td>
+                <td><code>interleaved-thinking-2025-05-14</code></td>
+                <td><span class="sensitivity-low">낮음</span></td>
+            </tr>
+            <tr>
+                <td>📊 성능</td>
+                <td>x-stainless-timeout, x-stainless-retry-count</td>
+                <td>number</td>
+                <td><code>3000</code>, <code>0</code></td>
+                <td><span class="sensitivity-low">낮음</span></td>
+            </tr>
+            <tr>
+                <td>⚙️ 모델 설정</td>
+                <td>model, max_tokens, stream</td>
+                <td>string, number, boolean</td>
+                <td><code>claude-sonnet-4-5-20250929</code></td>
+                <td><span class="sensitivity-low">낮음</span></td>
+            </tr>
+            <tr>
+                <td>💬 대화</td>
+                <td>messages[]</td>
+                <td>array</td>
+                <td><code>[{role, content}]</code></td>
+                <td><span class="sensitivity-high">높음</span></td>
+            </tr>
+            <tr>
+                <td>📋 메타데이터</td>
+                <td>metadata.user_id</td>
+                <td>string</td>
+                <td><code>user_xxx_session_yyy</code></td>
+                <td><span class="sensitivity-high">높음</span></td>
+            </tr>
+            <tr>
+                <td>🔧 도구</td>
+                <td>tools[]</td>
+                <td>array</td>
+                <td><code>[{name, input}]</code></td>
+                <td><span class="sensitivity-medium">보통</span></td>
+            </tr>
+        </table>
+
+        <h2>🔄 데이터 흐름</h2>
+
+        <div class="data-flow">
+            <div class="flow-step">
+                <h4>📤 REQUEST</h4>
+                <p>HTTP POST + JSON</p>
+                <div class="code-block" style="margin-top: 10px; padding: 10px;">
+{
+  model, messages,
+  system, tools,
+  metadata
+}
+                </div>
+            </div>
+
+            <div class="flow-arrow">⇄</div>
+
+            <div class="flow-step">
+                <h4>🔄 PROXY</h4>
+                <p>로그 & 포워딩</p>
+                <div class="code-block" style="margin-top: 10px; padding: 10px;">
+{
+  timestamp,
+  headers: {...},
+  body: {...}
+}
+                </div>
+            </div>
+
+            <div class="flow-arrow">⇄</div>
+
+            <div class="flow-step">
+                <h4>📥 RESPONSE</h4>
+                <p>Server-Sent Events</p>
+                <div class="code-block" style="margin-top: 10px; padding: 10px;">
+event: message_start
+event: content_block_delta
+event: message_stop
+                </div>
+            </div>
+        </div>
+
+        <h2>🎯 데이터 추출 전략 (우선순위별)</h2>
+
+        <ul class="priority-list">
+            <li>
+                <div class="priority-number">1</div>
+                <div>
+                    <strong>💬 대화 분석</strong>
+                    <p style="margin: 5px 0; color: #666;">messages[].content[].text 추출</p>
+                    <span class="category-badge category-content">사용자 질문 분석</span>
+                </div>
+            </li>
+            <li>
+                <div class="priority-number">2</div>
+                <div>
+                    <strong>📊 사용량 추적</strong>
+                    <p style="margin: 5px 0; color: #666;">usage.* 필드 모니터링</p>
+                    <span class="category-badge category-performance">비용/토큰 모니터링</span>
+                </div>
+            </li>
+            <li>
+                <div class="priority-number">3</div>
+                <div>
+                    <strong>⚙️ 모델 사용</strong>
+                    <p style="margin: 5px 0; color: #666;">model, max_tokens 분석</p>
+                    <span class="category-badge category-model">모델 사용 패턴</span>
+                </div>
+            </li>
+            <li>
+                <div class="priority-number">4</div>
+                <div>
+                    <strong>🔐 사용자 식별</strong>
+                    <p style="margin: 5px 0; color: #666;">user_id 패턴 분석</p>
+                    <span class="category-badge category-metadata">사용자 식별</span>
+                </div>
+            </li>
+            <li>
+                <div class="priority-number">5</div>
+                <div>
+                    <strong>📊 성능 모니터링</strong>
+                    <p style="margin: 5px 0; color: #666;">duration, x-process-time 추적</p>
+                    <span class="category-badge category-performance">성능 모니터링</span>
+                </div>
+            </li>
+            <li>
+                <div class="priority-number">6</div>
+                <div>
+                    <strong>🎤 기능 사용</strong>
+                    <p style="margin: 5px 0; color: #666;">anthropic-beta, tools[]</p>
+                    <span class="category-badge category-feature">베타 기능 사용</span>
+                </div>
+            </li>
+        </ul>
+
+        <div class="conclusion">
+            <h3>📋 결론: 데이터 카테고리 요약</h3>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-top: 20px;">
+                <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px;">
+                    <h4 style="color: white;">🔐 인증/보안</h4>
+                    <p>Authorization 토큰</p>
+                    <span class="tag tag-red">민감 데이터</span>
+                </div>
+
+                <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px;">
+                    <h4 style="color: white;">📋 클라이언트 정보</h4>
+                    <p>버전, OS, 런타임</p>
+                    <span class="tag tag-green">기술 정보</span>
+                </div>
+
+                <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px;">
+                    <h4 style="color: white;">🎤 기능 플래그</h4>
+                    <p>베타 기능, API 버전</p>
+                    <span class="tag tag-green">설정값</span>
+                </div>
+
+                <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px;">
+                    <h4 style="color: white;">📊 성능</h4>
+                    <p>타임아웃, 재시도, 처리 시간</p>
+                    <span class="tag tag-yellow">성능 지표</span>
+                </div>
+
+                <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px;">
+                    <h4 style="color: white;">⚙️ 모델 설정</h4>
+                    <p>모델명, 토큰 제한</p>
+                    <span class="tag tag-green">구성값</span>
+                </div>
+
+                <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px;">
+                    <h4 style="color: white;">💬 대화 컨텐츠</h4>
+                    <p>사용자/어시스턴트 메시지</p>
+                    <span class="tag tag-red">개인정보</span>
+                </div>
+            </div>
+
+            <h4 style="margin-top: 30px; color: white;">주요 데이터 포맷</h4>
+            <ul style="margin-top: 15px;">
+                <li><strong>Request:</strong> HTTP POST + JSON</li>
+                <li><strong>Response:</strong> Server-Sent Events (SSE) stream</li>
+                <li><strong>Content-Type:</strong> application/json (request), text/event-stream (response)</li>
+                <li><strong>인코딩:</strong> UTF-8</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

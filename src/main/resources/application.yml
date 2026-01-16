@@ -1,0 +1,52 @@
+server:
+  port: 8080
+  # IPv4만 사용
+  address: 127.0.0.1
+
+# 대상 서버 URL 설정
+target:
+  base-url: https://api.z.ai/api/anthropic
+
+# OLLAMA 설정 (개인정보 마스킹용)
+spring:
+  application:
+    name: glm-proxy
+  ai:
+    ollama:
+      base-url: http://192.168.1.100:11434
+      chat:
+        options:
+          model: qwen2.5
+          temperature: 0.0
+        # 30초 타임아웃 설정
+        timeout: 30s
+
+# PII 마스킹 설정
+pii:
+  masking:
+    enabled: false  # 일시적으로 비활성화 (OLLAMA 연결 문제)
+    max-size: 5000  # 5KB 이하만 OLLAMA 처리, 그 이상은 원본 전달
+    # 마스킹할 필드 목록
+    sensitive-fields:
+      - authorization
+      - token
+      - password
+      - api_key
+      - apikey
+      - secret
+      - user_id
+      - userid
+      - email
+      - phone
+      - ssn
+      - credit_card
+      - file_path
+      - filepath
+
+logging:
+  level:
+    com.example.glmproxy: DEBUG
+    org.springframework.web: INFO
+    org.springframework.ai: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"

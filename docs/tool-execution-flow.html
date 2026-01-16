@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CLAUDE CODE Tool Execution 데이터 흐름 상세 분석</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+
+        h1 {
+            color: #2c3e50;
+            border-bottom: 4px solid #667eea;
+            padding-bottom: 15px;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+
+        h2 {
+            color: #34495e;
+            margin-top: 50px;
+            margin-bottom: 25px;
+            padding-left: 15px;
+            border-left: 5px solid #667eea;
+            font-size: 1.8em;
+        }
+
+        h3 {
+            color: #555;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            font-size: 1.4em;
+        }
+
+        .answer-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            margin: 30px 0;
+            font-size: 1.3em;
+            font-weight: bold;
+            text-align: center;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .flow-diagram {
+            background: #f8f9fa;
+            padding: 40px;
+            border-radius: 10px;
+            margin: 30px 0;
+            font-family: 'Courier New', monospace;
+        }
+
+        .flow-step {
+            background: white;
+            border: 2px solid #667eea;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            position: relative;
+        }
+
+        .flow-step:before {
+            content: '↓';
+            position: absolute;
+            top: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 30px;
+            color: #667eea;
+        }
+
+        .flow-step:first-child:before {
+            display: none;
+        }
+
+        .code-block {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 25px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 20px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .code-block .key {
+            color: #9cdcfe;
+        }
+
+        .code-block .string {
+            color: #ce9178;
+        }
+
+        .code-block .number {
+            color: #b5cea8;
+        }
+
+        .code-block .boolean {
+            color: #569cd6;
+        }
+
+        .code-block .comment {
+            color: #6a9955;
+        }
+
+        .code-block .tool-type {
+            color: #4ec9b0;
+            font-weight: bold;
+        }
+
+        .info-box {
+            background: #d5f4e6;
+            border-left: 5px solid #27ae60;
+            padding: 20px;
+            margin: 25px 0;
+            border-radius: 6px;
+        }
+
+        .warning-box {
+            background: #ffeaa7;
+            border-left: 5px solid #fdcb6e;
+            padding: 20px;
+            margin: 25px 0;
+            border-radius: 6px;
+        }
+
+        .alert-box {
+            background: #fab1a0;
+            border-left: 5px solid #e74c3c;
+            padding: 20px;
+            margin: 25px 0;
+            border-radius: 6px;
+        }
+
+        .section {
+            margin: 40px 0;
+            padding: 25px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .lifecycle {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+
+        .lifecycle-step {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            border-top: 4px solid #667eea;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .lifecycle-step h4 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .lifecycle-step .step-number {
+            background: #667eea;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 10px;
+            font-weight: bold;
+        }
+
+        .tool-card {
+            background: white;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 6px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        }
+
+        .tool-card .tool-icon {
+            font-size: 24px;
+            margin-right: 10px;
+        }
+
+        .comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 30px 0;
+        }
+
+        .comparison-box {
+            padding: 20px;
+            border-radius: 8px;
+        }
+
+        .comparison-box.user {
+            background: #e8f4f8;
+            border: 2px solid #3498db;
+        }
+
+        .comparison-box.server {
+            background: #fef5e7;
+            border: 2px solid #f39c12;
+        }
+
+        .comparison-box h4 {
+            margin-bottom: 15px;
+        }
+
+        .check-list {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .check-list li {
+            padding: 10px 0;
+            padding-left: 30px;
+            position: relative;
+        }
+
+        .check-list li:before {
+            content: '✓';
+            position: absolute;
+            left: 0;
+            color: #27ae60;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        .cross-list {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .cross-list li {
+            padding: 10px 0;
+            padding-left: 30px;
+            position: relative;
+        }
+
+        .cross-list li:before {
+            content: '✗';
+            position: absolute;
+            left: 0;
+            color: #e74c3c;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        .summary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            margin: 40px 0;
+        }
+
+        .summary h3 {
+            color: white;
+            border-bottom: 2px solid rgba(255,255,255,0.3);
+            padding-bottom: 10px;
+        }
+
+        .summary ul {
+            margin-top: 20px;
+        }
+
+        .summary li {
+            margin: 12px 0;
+            padding-left: 20px;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 8px;
+        }
+
+        .badge-red {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .badge-blue {
+            background: #3498db;
+            color: white;
+        }
+
+        .badge-green {
+            background: #27ae60;
+            color: white;
+        }
+
+        .arrow-diagram {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            margin: 40px 0;
+            padding: 30px;
+            background: #ecf0f1;
+            border-radius: 10px;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .arrow-step {
+            background: white;
+            padding: 20px 30px;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .arrow-step h4 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .arrow {
+            font-size: 40px;
+            color: #7f8c8d;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+
+            h1 {
+                font-size: 1.8em;
+            }
+
+            .comparison {
+                grid-template-columns: 1fr;
+            }
+
+            .arrow-diagram {
+                flex-direction: column;
+            }
+
+            .arrow {
+                transform: rotate(90deg);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 CLAUDE CODE Tool Execution 데이터 흐름 상세 분석</h1>
+
+        <div class="answer-box">
+            💡 핵심 질문: "응답에 보이는 Write, Bash 로그들도 매번 서버로 전송하는가?"<br><br>
+            <span style="font-size: 1.2em;">답: <strong style="color: #ffeaa7;">네, 전부 서버로 전송됩니다!</strong></span>
+        </div>
+
+        <div class="alert-box">
+            <strong>⚠️ 중요:</strong> 사용자가 보는 제 응답에 있는 <code>Write</code>, <code>Bash</code> 같은 툴 사용 로그들은 <strong>실제로는 Request Body에 포함되어 API 서버로 전송되는 데이터</strong>입니다!
+        </div>
+
+        <h2>📊 전체 데이터 흐름</h2>
+
+        <div class="flow-diagram">
+            <div class="flow-step">
+                <h4>1️⃣ CLAUDE CODE 내부에서 발생</h4>
+                <ul>
+                    <li>✍️ Write 도구 사용 → 로그 생성</li>
+                    <li>⚙️ Bash 도구 사용 → 로그 생성</li>
+                    <li>📊 Task 도구 사용 → 로그 생성</li>
+                </ul>
+            </div>
+
+            <div class="flow-step">
+                <h4>2️⃣ 메시지 컨텐츠 구성</h4>
+                <div class="code-block">
+{
+  <span class="key">"role"</span>: <span class="string">"assistant"</span>,
+  <span class="key">"content"</span>: [
+    {<span class="key">"type"</span>: <span class="string">"text"</span>, <span class="key">"text"</span>: <span class="string">"사용자 답변"</span>},
+    {<span class="key">"type"</span>: <span class="string">"thinking"</span>, <span class="key">"thinking"</span>: <span class="string">"..."</span>},
+    {<span class="key">"type"</span>: <span class="string">"tool_use"</span>, <span class="key">"id"</span>: <span class="string">"call_xxx"</span>,
+     <span class="key">"name"</span>: <span class="string">"Write"</span>, <span class="key">"input"</span>: {...}}
+  ]
+}
+                </div>
+            </div>
+
+            <div class="flow-step">
+                <h4>3️⃣ API 서버로 전송 (Request Body)</h4>
+                <div class="code-block">
+<span class="key">POST</span> /v1/messages
+<span class="key">Body</span>: {
+  <span class="key">"messages"</span>: [
+    {<span class="key">"role"</span>: <span class="string">"user"</span>, <span class="key">"content"</span>: [...]},
+    {
+      <span class="key">"role"</span>: <span class="string">"assistant"</span>,
+      <span class="key">"content"</span>: [
+        {<span class="key">"type"</span>: <span class="string">"tool_use"</span>, ...},  <span class="comment">← 이것도 전송됨!</span>
+        {<span class="key">"type"</span>: <span class="string">"tool_use"</span>, ...}   <span class="comment">← 이것도 전송됨!</span>
+      ]
+    }
+  ]
+}
+                </div>
+            </div>
+        </div>
+
+        <h2>🔍 실제 로그 분석</h2>
+
+        <div class="section">
+            <h3>예시 1: Bash 도구 사용이 포함된 Request</h3>
+
+            <div class="code-block">
+{
+  <span class="key">"model"</span>: <span class="string">"claude-sonnet-4-5-20250929"</span>,
+  <span class="key">"messages"</span>: [
+    {
+      <span class="key">"role"</span>: <span class="string">"user"</span>,
+      <span class="key">"content"</span>: [
+        {<span class="key">"type"</span>: <span class="string">"text"</span>, <span class="key">"text"</span>: <span class="string">"glm을 CLAUDE CODE에 세팅하는거 보니까..."</span>}
+      ]
+    },
+    {
+      <span class="key">"role"</span>: <span class="string">"assistant"</span>,
+      <span class="key">"content"</span>: [
+        {
+          <span class="tool-type">"type": "thinking"</span>,
+          <span class="key">"thinking"</span>: <span class="string">"사용자가 CLAUDE CODE의 CONFIG를 수정하여..."</span>,
+          <span class="key">"signature"</span>: <span class="string">"6048a5cd36054edabd00b80b"</span>
+        },
+        {
+          <span class="tool-type">"type": "tool_use"</span>,
+          <span class="key">"id"</span>: <span class="string">"call_2ae5379029614977b1ca7bfa"</span>,
+          <span class="key">"name"</span>: <span class="string">"Bash"</span>,
+          <span class="key">"input"</span>: {
+            <span class="key">"command"</span>: <span class="string">"ls -la ~/.claude/"</span>,
+            <span class="key">"description"</span>: <span class="string">"List Claude config directory contents"</span>
+          }
+        },
+        {
+          <span class="tool-type">"type": "tool_use"</span>,
+          <span class="key">"id"</span>: <span class="string">"call_13f0a23ab0ef4179bb8f1963"</span>,
+          <span class="key">"name"</span>: <span class="string">"Glob"</span>,
+          <span class="key">"input"</span>: {
+            <span class="key">"pattern"</span>: <span class="string">"**/.claude*"</span>,
+            <span class="key">"path"</span>: <span class="string">"/Users/rohsunghyun"</span>
+          }
+        }
+      ]
+    }
+  ]
+}
+            </div>
+
+            <div class="info-box">
+                <strong>✅ 핵심 포인트:</strong>
+                <ul class="check-list">
+                    <li><code>type: "tool_use"</code> 인 컨텐츠 블록들이 <strong>모두 API 서버로 전송됨</strong></li>
+                    <li>각 tool_use에는 <code>id</code>, <code>name</code>, <code>input</code>이 포함됨</li>
+                    <li>이것이 사용자가 응답에서 보는 <code>⏺ Bash(...)</code>, <code>⏺ Read(...)</code>의 실체</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>예시 2: Write 도구 사용이 포함된 Request</h3>
+
+            <div class="code-block">
+{
+  <span class="key">"messages"</span>: [
+    {
+      <span class="key">"role"</span>: <span class="string">"assistant"</span>,
+      <span class="key">"content"</span>: [
+        {<span class="key">"type"</span>: <span class="string">"text"</span>, <span class="key">"text"</span>: <span class="string">"프로젝트 구조를 생성하겠습니다."</span>},
+        {
+          <span class="tool-type">"type": "tool_use"</span>,
+          <span class="key">"id"</span>: <span class="string">"call_abc123"</span>,
+          <span class="key">"name"</span>: <span class="string">"Write"</span>,
+          <span class="key">"input"</span>: {
+            <span class="key">"file_path"</span>: <span class="string">"/Users/rohsunghyun/glmAlaysis/build.gradle.kts"</span>,
+            <span class="key">"content"</span>: <span class="string">"import org.jetbrains.kotlin.gradle.tasks.KotlinCompile..."</span>
+          }
+        },
+        {
+          <span class="tool-type">"type": "tool_use"</span>,
+          <span class="key">"id"</span>: <span class="string">"call_def456"</span>,
+          <span class="key">"name"</span>: <span class="string">"Bash"</span>,
+          <span class="key">"input"</span>: {
+            <span class="key">"command"</span>: <span class="string">"mkdir -p src/main/kotlin"</span>,
+            <span class="key">"description"</span>: <span class="string">"Create Kotlin source directory"</span>
+          }
+        }
+      ]
+    }
+  ]
+}
+            </div>
+
+            <p style="margin-top: 15px;"><strong>⚠️ 중요:</strong> Write 도구의 경우 <code>content</code> 필드에 전체 파일 내용이 포함되어 전송됩니다!</p>
+        </div>
+
+        <h2>📋 데이터 구조 상세 분석</h2>
+
+        <div class="section">
+            <h3>Assistant Message의 content 배열 구조</h3>
+
+            <div class="code-block">
+<span class="key">messages</span>: [
+  {
+    <span class="key">role</span>: <span class="string">"assistant"</span>,
+    <span class="key">content</span>: [
+      <span class="comment">// 1. 텍스트 응답</span>
+      {
+        <span class="key">type</span>: <span class="string">"text"</span>,
+        <span class="key">text</span>: <span class="string">"사용자에게 설명합니다..."</span>
+      },
+
+      <span class="comment">// 2. Thinking 추적 (있는 경우)</span>
+      {
+        <span class="key">type</span>: <span class="string">"thinking"</span>,
+        <span class="key">thinking</span>: <span class="string">"문제를 분석중..."</span>,
+        <span class="key">signature</span>: <span class="string">"abc123..."</span>
+      },
+
+      <span class="comment">// 3. 툴 사용 (여러 개)</span>
+      {
+        <span class="key">type</span>: <span class="string">"tool_use"</span>,
+        <span class="key">id</span>: <span class="string">"call_xxx"</span>,              <span class="comment">// 고유 ID</span>
+        <span class="key">name</span>: <span class="string">"Bash"</span>,                 <span class="comment">// 툴 이름</span>
+        <span class="key">input</span>: {                      <span class="comment">// 툴 입력 파라미터</span>
+          <span class="key">command</span>: <span class="string">"ls -la"</span>,
+          <span class="key">description</span>: <span class="string">"List files"</span>
+        }
+      },
+
+      <span class="comment">// 4. 또 다른 툴 사용</span>
+      {
+        <span class="key">type</span>: <span class="string">"tool_use"</span>,
+        <span class="key">id</span>: <span class="string">"call_yyy"</span>,
+        <span class="key">name</span>: <span class="string">"Write"</span>,
+        <span class="key">input</span>: {
+          <span class="key">"file_path</span>: <span class="string">"/path/to/file.txt"</span>,
+          <span class="key">"content</span>: <span class="string">"file content..."</span>
+        }
+      }
+    ]
+  }
+]
+            </div>
+
+            <div class="warning-box">
+                <strong>⚠️ 기억하세요:</strong> <strong>모든 것이 Request Body에 포함되어 API 서버로 전송됩니다!</strong>
+            </div>
+        </div>
+
+        <h2>🔄 툴 사용의 완전한 수명 주기</h2>
+
+        <div class="lifecycle">
+            <div class="lifecycle-step">
+                <div class="step-number">1</div>
+                <h4>툴 사용 결정</h4>
+                <p>AI 내부</p>
+                <div class="code-block" style="margin-top: 10px; padding: 10px;">
+AI: "파일을 읽어야겠다"
+  → tool_use 생성
+  → content 배열에 추가
+                </div>
+            </div>
+
+            <div class="lifecycle-step">
+                <div class="step-number">2</div>
+                <h4>API 서버로 전송</h4>
+                <p>Request</p>
+                <div class="code-block" style="margin-top: 10px; padding: 10px;">
+{
+  <span class="key">"messages"</span>: [{
+    <span class="key">"content"</span>: [{
+      <span class="key">"type"</span>: <span class="string">"tool_use"</span>,
+      <span class="key">"id"</span>: <span class="string">"call_123"</span>,
+      <span class="key">"name"</span>: <span class="string">"Read"</span>
+    }]
+  }]
+}
+                </div>
+            </div>
+
+            <div class="lifecycle-step">
+                <div class="step-number">3</div>
+                <h4>사용자에게 표시</h4>
+                <p>CLAUDE CODE UI</p>
+                <div class="code-block" style="margin-top: 10px; padding: 10px;">
+<span class="tool-type">⏺</span> Read(settings.json)
+                </div>
+            </div>
+
+            <div class="lifecycle-step">
+                <div class="step-number">4</div>
+                <h4>툴 실행 결과 수신</h4>
+                <p>다음 Request</p>
+                <div class="code-block" style="margin-top: 10px; padding: 10px;">
+{
+  <span class="key">"type"</span>: <span class="string">"tool_result"</span>,
+  <span class="key">"tool_use_id"</span>: <span class="string">"call_123"</span>,
+  <span class="key">"content"</span>: [...]
+}
+                </div>
+            </div>
+        </div>
+
+        <h2>🔐 보안 및 프라이버시 고려사항</h2>
+
+        <div class="alert-box">
+            <strong>⚠️ 툴 사용에 포함되는 민감 정보</strong>
+        </div>
+
+        <div class="tool-card">
+            <span class="tool-icon">📁</span>
+            <strong>1. file_path (Read, Write)</strong>
+            <ul>
+                <li>사용자의 파일 시스템 구조 노출</li>
+                <li>프로젝트 이름, 경로</li>
+                <li><span class="badge badge-red">높은 민감도</span></li>
+            </ul>
+        </div>
+
+        <div class="tool-card">
+            <span class="tool-icon">⚙️</span>
+            <strong>2. command (Bash)</strong>
+            <ul>
+                <li>사용자가 실행한 명령어</li>
+                <li>시스템 정보 노출 가능</li>
+                <li><span class="badge badge-red">높은 민감도</span></li>
+            </ul>
+        </div>
+
+        <div class="tool-card">
+            <span class="tool-icon">✍️</span>
+            <strong>3. content (Write)</strong>
+            <ul>
+                <li>작성한 코드 내용</li>
+                <li>프라이버한 정보 포함 가능</li>
+                <li><span class="badge badge-blue">중간 민감도</span></li>
+            </ul>
+        </div>
+
+        <div class="tool-card">
+            <span class="tool-icon">📊</span>
+            <strong>4. output (tool_result)</strong>
+            <ul>
+                <li>툴 실행 결과</li>
+                <li>파일 내용, 명령 출력</li>
+                <li><span class="badge badge-red">높은 민감도</span></li>
+            </ul>
+        </div>
+
+        <h2>📏 데이터 크기 분석</h2>
+
+        <div class="section">
+            <h3>툴 사용이 포함된 Request 크기</h3>
+
+            <div class="comparison">
+                <div class="comparison-box user">
+                    <h4>작은 요청</h4>
+                    <ul>
+                        <li>기본 메시지: ~1 KB</li>
+                        <li>각 tool_use: ~200 bytes</li>
+                        <li>5개 tool_use: ~1 KB</li>
+                        <li><strong>총: ~2 KB</strong></li>
+                    </ul>
+                </div>
+
+                <div class="comparison-box server">
+                    <h4>큰 요청 (실제)</h4>
+                    <ul>
+                        <li>여러 툴 사용: 10~20개</li>
+                        <li>Thinking 추적 포함</li>
+                        <li>Write content 포함</li>
+                        <li><strong>총: 100KB ~ 300KB</strong></li>
+                    </ul>
+                    <p style="margin-top: 10px;"><small>실제 로그: Content-Length: 341872</small></p>
+                </div>
+            </div>
+
+            <div class="warning-box">
+                <strong>⚠️ 기억하세요:</strong> 툴 사용이 많을수록, Thinking 추적이 있을수록 Request 크기가 커지며, <strong>이것이 매번 전송됩니다!</strong>
+            </div>
+        </div>
+
+        <h2>❓ 왜 이렇게 하는가?</h2>
+
+        <div class="info-box">
+            <h4>1. 완전한 컨텍스트 유지</h4>
+            <ul class="check-list">
+                <li>AI가 어떤 툴을 사용했는지 알아야 함</li>
+                <li>툴의 입력 파라미터를 알아야 함</li>
+                <li>툴의 실행 결과를 알아야 함</li>
+                <li>전체 대화 맥락을 유지해야 함</li>
+            </ul>
+        </div>
+
+        <div class="info-box">
+            <h4>2. 상태 비저장 (Stateless) API</h4>
+            <ul class="check-list">
+                <li>API 서버는 상태를 저장하지 않음</li>
+                <li>모든 컨텍스트는 Request에 포함</li>
+                <li>툴 사용 내역도 예외 없이 전송</li>
+            </ul>
+        </div>
+
+        <div class="info-box">
+            <h4>3. 로깅 및 디버깅</h4>
+            <ul class="check-list">
+                <li>서버는 모든 툴 사용을 기록</li>
+                <li>문제 발생 시 전체 흐름 추적 가능</li>
+                <li>사용자 활동 모니터링</li>
+            </ul>
+        </div>
+
+        <div class="summary">
+            <h3>📋 결론: 핵심 이해</h3>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-top: 20px;">
+                <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px;">
+                    <h4 style="color: white;">1. 모든 툴 사용 전송</h4>
+                    <p style="margin-top: 10px;">Write, Read, Bash 등 모두</p>
+                    <span class="badge badge-green">API 서버 전송</span>
+                </div>
+
+                <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px;">
+                    <h4 style="color: white;">2. 툴 실행 결과 전송</h4>
+                    <p style="margin-top: 10px;">tool_result 형태로</p>
+                    <span class="badge badge-green">다시 전송됨</span>
+                </div>
+
+                <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px;">
+                    <h4 style="color: white;">3. Request 크기 증가</h4>
+                    <p style="margin-top: 10px;">툴 사용 많을수록 커짐</p>
+                    <span class="badge badge-blue">수십 ~ 수백 KB</span>
+                </div>
+
+                <div style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 8px;">
+                    <h4 style="color: white;">4. 프라이버시 영향</h4>
+                    <p style="margin-top: 10px;">파일 시스템, 코드 내용</p>
+                    <span class="badge badge-red">민감 정보 노출</span>
+                </div>
+            </div>
+
+            <h4 style="margin-top: 30px; color: white;">데이터 흐름 요약</h4>
+            <div style="background: rgba(0,0,0,0.2); padding: 20px; border-radius: 8px; margin-top: 15px; font-family: 'Courier New', monospace;">
+[CLAUDE CODE 내부] → 툴 사용 발생<br>
+[messages[].content[]] → {type: "tool_use", name: "Bash", input: {...}}<br>
+[API Request] → POST /v1/messages + Body: {messages: [...tool_use...]}<br>
+[프록시 로그] → 모든 tool_use가 기록됨<br>
+[API 서버] → 툴 사용 정보 처리 및 저장
+            </div>
+
+            <p style="margin-top: 20px; font-size: 1.1em; font-weight: bold;">
+                💡 사용자가 보는 <code>⏺ Bash(...)</code>, <code>✍️ Write(...)</code> 같은 로그들은 <strong>실제로는 API Request Body의 일부로 전송되는 데이터입니다!</strong>
+            </p>
+        </div>
+    </div>
+</body>
+</html>

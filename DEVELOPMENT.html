@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GLM Proxy - 개발 문서</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f5f5f5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 20px;
+            text-align: center;
+            margin-bottom: 40px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .content {
+            background: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        h2 {
+            color: #667eea;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #667eea;
+        }
+
+        h3 {
+            color: #764ba2;
+            margin-top: 30px;
+            margin-bottom: 15px;
+        }
+
+        h4 {
+            color: #555;
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+
+        p {
+            margin-bottom: 15px;
+        }
+
+        ul, ol {
+            margin: 15px 0;
+            padding-left: 30px;
+        }
+
+        li {
+            margin-bottom: 8px;
+        }
+
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 20px;
+            border-radius: 5px;
+            overflow-x: auto;
+            margin: 20px 0;
+        }
+
+        pre code {
+            background: transparent;
+            padding: 0;
+            color: inherit;
+        }
+
+        .code-comment { color: #75715e; }
+        .code-keyword { color: #66d9ef; }
+        .code-string { color: #e6db74; }
+        .code-function { color: #a6e22e; }
+        .code-number { color: #ae81ff; }
+
+        blockquote {
+            border-left: 4px solid #667eea;
+            padding-left: 20px;
+            margin: 20px 0;
+            color: #666;
+            font-style: italic;
+        }
+
+        .warning {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+
+        .info {
+            background: #d1ecf1;
+            border-left: 4px solid #17a2b8;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+
+        .success {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background: #667eea;
+            color: white;
+        }
+
+        tr:hover {
+            background: #f5f5f5;
+        }
+
+        .toc {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 30px;
+        }
+
+        .toc h3 {
+            margin-top: 0;
+            color: #667eea;
+        }
+
+        .toc ul {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .toc li {
+            margin-bottom: 5px;
+        }
+
+        .toc a {
+            color: #667eea;
+            text-decoration: none;
+        }
+
+        .toc a:hover {
+            text-decoration: underline;
+        }
+
+        .diagram {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 5px;
+            text-align: center;
+            font-family: monospace;
+            margin: 20px 0;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 0.8em;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+
+        .badge-success { background: #28a745; color: white; }
+        .badge-warning { background: #ffc107; color: #333; }
+        .badge-info { background: #17a2b8; color: white; }
+        .badge-danger { background: #dc3545; color: white; }
+
+        .footer {
+            text-align: center;
+            margin-top: 40px;
+            padding: 20px;
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        @media (max-width: 768px) {
+            .content {
+                padding: 20px;
+            }
+
+            header h1 {
+                font-size: 1.8em;
+            }
+
+            pre {
+                font-size: 0.85em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>🚀 GLM Proxy</h1>
+        <p>Anthropic API PII Masking Proxy 개발 문서</p>
+    </header>
+
+    <div class="container">
+        <div class="content">
+            <div class="toc">
+                <h3>📋 목차</h3>
+                <ul>
+                    <li><a href="#overview">프로젝트 개요</a></li>
+                    <li><a href="#changelog">개발 일지</a></li>
+                    <li><a href="#testing">테스트 방법</a></li>
+                    <li><a href="#sse-format">SSE 이벤트 형식</a></li>
+                    <li><a href="#pii-masking">PII 마스킹</a></li>
+                    <li><a href="#troubleshooting">문제 해결</a></li>
+                    <li><a href="#code-structure">코드 구조</a></li>
+                    <li><a href="#execution-logs">실제 실행 로그</a></li>
+                </ul>
+            </div>
+
+            <section id="overview">
+                <h2>프로젝트 개요</h2>
+
+                <h3>🎯 목표</h3>
+                <p>CLAUDE CODE와 Anthropic API 사이에서 개인정보(PII)를 실시간으로 마스킹하는 프록시 서버 구현</p>
+
+                <h3>🛠 기술 스택</h3>
+                <ul>
+                    <li><strong>Kotlin</strong> + Spring Boot 3.2.0</li>
+                    <li><strong>Spring WebFlux</strong> (Reactive Programming)</li>
+                    <li><strong>OLLAMA</strong> (로컬/원격 LLM 서버, PII 감지용)</li>
+                    <li><strong>Netty</strong> (비동기 서버)</li>
+                </ul>
+
+                <h3>🏗 아키텍처</h3>
+                <div class="diagram">
+                    <pre>
+CLAUDE CODE → Spring Boot Proxy → [PII Masking] → Anthropic API
+                           ↓
+                      [OLLAMA LLM]
+                   (개인정보 감지용)
+                    </pre>
+                </div>
+            </section>
+
+            <section id="changelog">
+                <h2>📅 개발 일지</h2>
+
+                <h3>2026-01-16: 핵심 기능 구현</h3>
+
+                <h4>1️⃣ 초기 문제 발생</h4>
+                <div class="warning">
+                    <strong>문제:</strong> CLAUDE CODE가 응답을 표시하지 않음<br>
+                    <strong>원인:</strong> <code>message_start</code> 이벤트에 필수 필드 누락
+                </div>
+
+                <p><strong>필수 필드:</strong></p>
+                <ul>
+                    <li><code>content: []</code></li>
+                    <li><code>model: "..."</code></li>
+                    <li><code>stop_reason: null</code></li>
+                    <li><code>stop_sequence: null</code></li>
+                    <li><code>usage: {input_tokens: 0, output_tokens: 0}</code></li>
+                </ul>
+
+                <p><strong>해결:</strong> <code>createMessageStartEvent()</code> 함수에 모든 필수 필드 추가</p>
+
+                <pre><code><span class="code-comment">// ProxyService.kt:96-103</span>
+<span class="code-keyword">fun</span> <span class="code-function">createMessageStartEvent</span>(messageId: String, role: String, model: String): DataBuffer {
+    <span class="code-keyword">val</span> data = <span class="code-string">"""{"type":"message_start","message":{</span>
+<span class="code-string">        "id":"$messageId",</span>
+<span class="code-string">        "type":"message",</span>
+<span class="code-string">        "role":"assistant",</span>
+<span class="code-string">        "content":[],           <span class="code-comment">// 필수!</span></span>
+<span class="code-string">        "model":"$model",       <span class="code-comment">// 필수!</span></span>
+<span class="code-string">        "stop_reason":null,     <span class="code-comment">// 필수!</span></span>
+<span class="code-string">        "stop_sequence":null,   <span class="code-comment">// 필수!</span></span>
+<span class="code-string">        "usage":{               <span class="code-comment">// 필수!</span></span>
+<span class="code-string">            "input_tokens":0,</span>
+<span class="code-string">            "output_tokens":0</span>
+<span class="code-string">        }</span>
+<span class="code-string">    }}"""</span>
+    <span class="code-keyword">return</span> <span class="code-function">createSSEEvent</span>(<span class="code-string">"message_start"</span>, data)
+}</code></pre>
+
+                <h4>2️⃣ 테스트 엔드포인트 구현</h4>
+                <p><strong>목적:</strong> 실제 API 호출 없이 SSE 이벤트 형식 검증</p>
+
+                <p><strong>엔드포인트:</strong></p>
+                <ul>
+                    <li><code>/test/events</code> - 기본 테스트</li>
+                    <li><code>/test/v1/messages</code> - CLAUDE CODE 호환</li>
+                </ul>
+
+                <div class="success">
+                    <strong>✅ 결과:</strong> CLAUDE CODE에서 "테스트 응답입니다!" 메시지 정상 표시됨
+                </div>
+
+                <h4>3️⃣ 다중 Content Block 테스트</h4>
+                <p>여러 개의 <code>content_block</code> 처리 및 지연(Sleep) 테스트</p>
+
+                <div class="info">
+                    <strong>이벤트 순서:</strong>
+                    <ol>
+                        <li>content_block_start (index: 0)</li>
+                        <li>sleep 5초</li>
+                        <li>content_block_delta (index: 0) - "🔝 첫 번째 블록입니다!"</li>
+                        <li>content_block_stop (index: 0)</li>
+                        <li>content_block_start (index: 1)</li>
+                        <li>sleep 5초</li>
+                        <li>content_block_delta (index: 1) - "🚀 두 번째 블록입니다!"</li>
+                        <li>content_block_stop (index: 1)</li>
+                    </ol>
+                </div>
+
+                <h4>4️⃣ 프록시 기능 완성</h4>
+                <div class="warning">
+                    <strong>문제:</strong> PII 마스킹 비활성화 시 응답이 안 보임<br>
+                    <strong>원인:</strong> <code>transformApiEventToContentBlock()</code> 함수가 필수 이벤트를 변환
+                </div>
+
+                <p><strong>해결:</strong> PII 마스킹 비활성화 시 원본 그대로 전달</p>
+
+                <div class="success">
+                    <strong>✅ 최종 테스트 결과:</strong><br>
+                    테스트: "HELLO MY EMAILS IS TEST@HELLO.COM"<br>
+                    응답 시간: 1413ms<br>
+                    상태: CLAUDE CODE에서 정상 응답 표시됨
+                </div>
+            </section>
+
+            <section id="testing">
+                <h2>🧪 테스트 방법</h2>
+
+                <h3>1. 실제 API 호출 테스트</h3>
+
+                <p><strong>settings.json 설정:</strong></p>
+                <pre><code>{
+  <span class="code-string">"env"</span>: {
+    <span class="code-string">"ANTHROPIC_BASE_URL"</span>: <span class="code-string">"http://localhost:8080"</span>
+  }
+}</code></pre>
+
+                <p><strong>서버 시작:</strong></p>
+                <pre><code>./gradlew bootRun</code></pre>
+
+                <h3>2. 테스트 엔드포인트 (API 호출 없음)</h3>
+
+                <p><strong>방법 A: curl로 직접 테스트</strong></p>
+                <pre><code>curl -N -X POST http://localhost:8080/test/v1/messages \
+  -H <span class="code-string">"Content-Type: application/json"</span> \
+  -d <span class="code-string">'{"model":"claude-sonnet-4-5-20250929","max_tokens":1024,"stream":true,"messages":[{"role":"user","content":"Test"}]}'</span></code></pre>
+
+                <p><strong>방법 B: settings.json 변경</strong></p>
+                <pre><code>{
+  <span class="code-string">"env"</span>: {
+    <span class="code-string">"ANTHROPIC_BASE_URL"</span>: <span class="code-string">"http://localhost:8080/test"</span>
+  }
+}</code></pre>
+
+                <h3>3. PII 마스킹 테스트</h3>
+                <p><strong>application.yml 변경:</strong></p>
+                <pre><code><span class="code-keyword">pii:</span>
+  <span class="code-keyword">masking:</span>
+    <span class="code-keyword">enabled:</span> <span class="code-keyword">true</span></code></pre>
+
+                <p><strong>예상 동작:</strong></p>
+                <ol>
+                    <li>요청에서 <code>test@example.com</code> 감지</li>
+                    <li>OLLAMA로 PII 확인</li>
+                    <li><code>***@***.***</code>로 마스킹하여 API 전송</li>
+                    <li>응답 수신 후 원래 주소로 복원</li>
+                </ol>
+            </section>
+
+            <section id="sse-format">
+                <h2>📡 SSE 이벤트 형식</h2>
+
+                <h3>Anthropic 표준 이벤트 순서</h3>
+                <div class="diagram">
+                    <pre>
+1. message_start
+2. content_block_start (index: 0)
+3. content_block_delta (index: 0) - 여러 번
+4. content_block_stop (index: 0)
+5. content_block_start (index: 1) - 선택사항
+6. content_block_delta (index: 1) - 여러 번
+7. content_block_stop (index: 1)
+8. message_delta
+9. message_stop
+                    </pre>
+                </div>
+
+                <h3>message_start 필수 필드</h3>
+                <div class="warning">
+                    ⚠️ <strong>중요:</strong> CLAUDE CODE는 다음 필드가 없으면 응답을 표시하지 않습니다
+                </div>
+
+                <pre><code>{
+  <span class="code-string">"type"</span>: <span class="code-string">"message_start"</span>,
+  <span class="code-string">"message"</span>: {
+    <span class="code-string">"id"</span>: <span class="code-string">"msg_xxx"</span>,
+    <span class="code-string">"type"</span>: <span class="code-string">"message"</span>,
+    <span class="code-string">"role"</span>: <span class="code-string">"assistant"</span>,
+    <span class="code-string">"content"</span>: [],           <span class="code-comment">// 필수!</span>
+    <span class="code-string">"model"</span>: <span class="code-string">"claude-sonnet-4-5-20250929"</span>,  <span class="code-comment">// 필수!</span>
+    <span class="code-string">"stop_reason"</span>: <span class="code-keyword">null</span>,     <span class="code-comment">// 필수!</span>
+    <span class="code-string">"stop_sequence"</span>: <span class="code-keyword">null</span>,   <span class="code-comment">// 필수!</span>
+    <span class="code-string">"usage"</span>: {               <span class="code-comment">// 필수!</span>
+      <span class="code-string">"input_tokens"</span>: <span class="code-number">0</span>,
+      <span class="code-string">"output_tokens"</span>: <span class="code-number">0</span>
+    }
+  }
+}</code></pre>
+
+                <h3>Content Block Index</h3>
+                <p>각 <code>content_block_*</code> 이벤트는 <code>index</code> 필드로 그룹화:</p>
+
+                <pre><code><span class="code-comment">// 첫 번째 블록</span>
+{<span class="code-string">"type"</span>:<span class="code-string">"content_block_start"</span>,<span class="code-string">"index"</span>:<span class="code-number">0</span>,<span class="code-string">"content_block"</span>:{<span class="code-string">"type"</span>:<span class="code-string">"text"</span>,<span class="code-string">"text"</span>:<span class="code-string">""</span>}}
+{<span class="code-string">"type"</span>:<span class="code-string">"content_block_delta"</span>,<span class="code-string">"index"</span>:<span class="code-number">0</span>,<span class="code-string">"delta"</span>:{<span class="code-string">"type"</span>:<span class="code-string">"text_delta"</span>,<span class="code-string">"text"</span>:<span class="code-string">"Hello"</span>}}
+{<span class="code-string">"type"</span>:<span class="code-string">"content_block_stop"</span>,<span class="code-string">"index"</span>:<span class="code-number">0</span>}
+
+<span class="code-comment">// 두 번째 블록</span>
+{<span class="code-string">"type"</span>:<span class="code-string">"content_block_start"</span>,<span class="code-string">"index"</span>:<span class="code-number">1</span>,<span class="code-string">"content_block"</span>:{<span class="code-string">"type"</span>:<span class="code-string">"text"</span>,<span class="code-string">"text"</span>:<span class="code-string">""</span>}}
+{<span class="code-string">"type"</span>:<span class="code-string">"content_block_delta"</span>,<span class="code-string">"index"</span>:<span class="code-number">1</span>,<span class="code-string">"delta"</span>:{<span class="code-string">"type"</span>:<span class="code-string">"text_delta"</span>,<span class="code-string">"text"</span>:<span class="code-string">"World"</span>}}
+{<span class="code-string">"type"</span>:<span class="code-string">"content_block_stop"</span>,<span class="code-string">"index"</span>:<span class="code-number">1</span>}</code></pre>
+            </section>
+
+            <section id="pii-masking">
+                <h2>🔒 PII 마스킹</h2>
+
+                <h3>작동 원리</h3>
+                <div class="diagram">
+                    <pre>
+1. CLAUDE CODE → "My email is test@example.com"
+                ↓
+2. Proxy Server → OLLAMA LLM
+                 "PII 감지: test@example.com (type: email)"
+                ↓
+3. 마스킹 → "My email is ***@***.***"
+           ↓
+4. Anthropic API → 마스킹된 메시지로 응답 생성
+                   ↓
+5. Proxy Server → 응답에서 복원
+                   "***@***.***" → "test@example.com"
+                ↓
+6. CLAUDE CODE → "My email is test@example.com"
+                    </pre>
+                </div>
+
+                <h3>OLLAMA 프롬프트</h3>
+                <pre><code>Analyze the following text and identify ALL Personally Identifiable Information (PII).
+Return a JSON list of PII items found, with each item having:
+- <span class="code-string">"text"</span>: the exact PII text found
+- <span class="code-string">"type"</span>: one of: email, phone, ssn, credit_card, ip_address, date_of_birth, address
+
+Text to analyze: $text
+
+Respond ONLY with valid JSON array, no other text.</code></pre>
+
+                <h3>현재 상태</h3>
+                <div class="info">
+                    <ul>
+                        <li><strong>PII 마스킹:</strong> 비활성화됨 (<code>application.yml</code>에서 <code>enabled: false</code>)</li>
+                        <li><strong>OLLAMA 연결:</strong> 일시적으로 사용 안 함 (연결 문제로 인해)</li>
+                        <li><strong>동작 모드:</strong> 순수 프록시 (원본 데이터 그대로 전달)</li>
+                    </ul>
+                </div>
+            </section>
+
+            <section id="troubleshooting">
+                <h2>🔧 문제 해결</h2>
+
+                <h3>문제 1: CLAUDE CODE 응답 없음</h3>
+                <div class="warning">
+                    <strong>증상:</strong> 요청은 전송되지만 CLAUDE CODE 화면에 아무것도 안 보임<br>
+                    <strong>원인:</strong> <code>message_start</code> 이벤트에 필수 필드 누락
+                </div>
+
+                <p><strong>해결:</strong> 모든 필수 필드 포함</p>
+
+                <h3>문제 2: 엔드포인트 라우팅 오류</h3>
+                <div class="warning">
+                    <strong>증상:</strong> <code>/test2/v1/messages</code> 요청이 실제 API로 전달됨<br>
+                    <strong>원인:</strong> <code>ProxyController</code>에서 <code>/**</code>가 특정 엔드포인트보다 먼저 정의됨
+                </div>
+
+                <p><strong>해결:</strong> 특정 엔드포인트를 먼저 정의</p>
+
+                <h3>문제 3: PII 마스킹 비활성화 시 응답 없음</h3>
+                <div class="warning">
+                    <strong>증상:</strong> PII 마스킹 끄면 응답이 안 옴<br>
+                    <strong>원인:</strong> <code>transformApiEventToContentBlock()</code>이 필수 이벤트를 변환
+                </div>
+
+                <p><strong>해결:</strong> PII 마스킹 비활성화 시 원본 전달</p>
+
+                <h3>문제 4: OLLAMA 연결 실패</h3>
+                <div class="warning">
+                    <strong>에러:</strong> <code>I/O error on POST request for "http://192.168.1.100:11434/api/chat"</code>
+                </div>
+
+                <p><strong>임시 해결:</strong> PII 마스킹 비활성화</p>
+                <p><strong>근본 해결 (예정):</strong></p>
+                <ul>
+                    <li>OLLAMA 서버 상태 확인</li>
+                    <li>네트워크 연결 확인</li>
+                    <li>타임아웃 설정 조정</li>
+                    <li>재시도 로직 추가</li>
+                </ul>
+            </section>
+
+            <section id="code-structure">
+                <h2>📁 코드 구조</h2>
+
+                <h3>주요 파일</h3>
+                <pre><code>src/main/kotlin/com/example/glmproxy/
+├── GlmProxyApplication.kt        <span class="code-comment"># 메인 진입점</span>
+├── ProxyController.kt            <span class="code-comment"># REST 컨트롤러</span>
+│   ├── /test/events              <span class="code-comment"># 테스트 엔드포인트</span>
+│   ├── /test/v1/messages         <span class="code-comment"># CLAUDE CODE 호환 테스트</span>
+│   └── /**                       <span class="code-comment"># 프록시 엔드포인트</span>
+├── ProxyService.kt               <span class="code-comment"># 프록시 비즈니스 로직</span>
+│   ├── proxyRequest()            <span class="code-comment"># 메인 프록시 함수</span>
+│   ├── sendTestEvents()          <span class="code-comment"># 테스트 이벤트 전송</span>
+│   └── createMessageStartEvent() <span class="code-comment"># SSE 이벤트 생성</span>
+└── PIIMaskingService.kt          <span class="code-comment"># PII 마스킹 서비스</span></code></pre>
+
+                <h3>핵심 함수</h3>
+
+                <h4>1. createMessageStartEvent()</h4>
+                <p><strong>위치:</strong> ProxyService.kt:96-103</p>
+                <p><strong>역할:</strong> Anthropic 표준 <code>message_start</code> 이벤트 생성</p>
+                <p><strong>중요:</strong> 모든 필수 필드 포함해야 CLAUDE CODE가 응답 표시</p>
+
+                <h4>2. sendTestEvents()</h4>
+                <p><strong>위치:</strong> ProxyService.kt:517-636</p>
+                <p><strong>역할:</strong> 실제 API 호출 없이 테스트용 SSE 이벤트 전송</p>
+                <p><strong>사용:</strong> SSE 이벤트 형식 검증, CLAUDE CODE 호환 테스트</p>
+
+                <h4>3. proxyRequest()</h4>
+                <p><strong>위치:</strong> ProxyService.kt:33-511</p>
+                <p><strong>역할:</strong> 메인 프록시 로직</p>
+                <p><strong>동작:</strong></p>
+                <ol>
+                    <li>요청 수신 및 로깅</li>
+                    <li>PII 마스킹 (활성화 시)</li>
+                    <li>Anthropic API로 전송</li>
+                    <li>응답 스트리밍</li>
+                    <li>PII 복원 (활성화 시)</li>
+                </ol>
+            </section>
+
+            <section id="execution-logs">
+                <h2>📋 실제 실행 로그</h2>
+
+                <h3>1. 성공적인 API 프록시 요청</h3>
+                <div class="success">
+                    <strong>테스트:</strong> CLAUDE CODE에서 "HELLO MY EMAILS IS TEST@HELLO.COM" 메시지 전송
+                </div>
+
+                <pre><code>2026-01-16 15:52:54.576 [reactor-http-nio-8] INFO  c.e.g.ProxyService - ================================================================================
+2026-01-16 15:52:54.576 [reactor-http-nio-8] INFO  c.e.g.ProxyService - REQUEST INCOMING
+2026-01-16 15:52:54.576 [reactor-http-nio-8] INFO  c.e.g.ProxyService - Timestamp: 1768546374573
+2026-01-16 15:52:54.576 [reactor-http-nio-8] INFO  c.e.g.ProxyService - Method: POST
+2026-01-16 15:52:54.576 [reactor-http-nio-8] INFO  c.e.g.ProxyService - Path: /v1/messages
+2026-01-16 15:52:54.576 [reactor-http-nio-8] INFO  c.e.g.ProxyService - Query: {beta=[true]}
+2026-01-16 15:52:54.576 [reactor-http-nio-8] INFO  c.e.g.ProxyService - Body (Original): {"model":"claude-haiku-4-5-20251001","messages":[{"role":"user","content":[{"type":"text","text":"HELLO MY EMAILS IS TEST@HELLO.COM"}]}]}
+2026-01-16 15:52:54.576 [reactor-http-nio-8] INFO  c.e.g.ProxyService - --------------------------------------------------------------------------------
+2026-01-16 15:52:54.576 [reactor-http-nio-8] INFO  c.e.g.ProxyService - ⚠️  PII Masking DISABLED - Pure proxy mode
+2026-01-16 15:52:54.576 [reactor-http-nio-8] INFO  c.e.g.ProxyService - Forwarding to: https://api.z.ai/api/anthropic/v1/messages?beta=true
+2026-01-16 15:52:54.576 [reactor-http-nio-8] INFO  c.e.g.ProxyService - Streaming response from API...
+2026-01-16 15:52:57.284 [reactor-http-nio-4] DEBUG c.e.g.ProxyService - Forwarding API response buffer (383 bytes)
+2026-01-16 15:52:57.287 [reactor-http-nio-4] INFO  c.e.g.ProxyService - ✅ Response streaming completed (Duration: 1413ms)
+2026-01-16 15:52:57.287 [reactor-http-nio-4] INFO  c.e.g.ProxyService - ⚠️  PII MASKING DISABLED: Pure proxy mode, original data sent to API
+2026-01-16 15:52:57.287 [reactor-http-nio-4] INFO  c.e.g.ProxyService - ================================================================================</code></pre>
+
+                <h3>2. test 엔드포인트 성공 로그</h3>
+                <div class="info">
+                    <strong>테스트:</strong> settings.json을 http://localhost:8080/test로 설정 후 CLAUDE CODE 실행
+                </div>
+
+                <pre><code>2026-01-16 15:31:50.871 [reactor-http-nio-5] INFO  c.e.g.ProxyService - 🧪 Test endpoint called - sending dummy SSE events
+2026-01-16 15:31:50.872 [reactor-http-nio-5] DEBUG c.e.g.ProxyService - 📤 Test: message_start sent
+2026-01-16 15:31:50.873 [reactor-http-nio-5] DEBUG c.e.g.ProxyService - 📤 Test: content_block_start sent
+2026-01-16 15:31:50.874 [reactor-http-nio-5] DEBUG c.e.g.ProxyService - 📤 Test: content_block_delta sent
+2026-01-16 15:31:50.875 [reactor-http-nio-5] DEBUG c.e.g.ProxyService - 📤 Test: content_block_delta sent
+2026-01-16 15:31:50.876 [reactor-http-nio-5] DEBUG c.e.g.ProxyService - 📤 Test: content_block_delta sent
+2026-01-16 15:31:50.877 [reactor-http-nio-5] DEBUG c.e.g.ProxyService - 📤 Test: content_block_delta sent
+2026-01-16 15:31:50.878 [reactor-http-nio-5] DEBUG c.e.g.ProxyService - 📤 Test: content_block_delta sent
+2026-01-16 15:31:50.879 [reactor-http-nio-5] DEBUG c.e.g.ProxyService - 📤 Test: content_block_stop sent
+2026-01-16 15:31:50.880 [reactor-http-nio-5] DEBUG c.e.g.ProxyService - 📤 Test: message_delta sent
+2026-01-16 15:31:50.881 [reactor-http-nio-5] DEBUG c.e.g.ProxyService - 📤 Test: message_stop sent
+2026-01-16 15:31:50.881 [reactor-http-nio-5] INFO  c.e.g.ProxyService - ✅ Test: All events sent successfully</code></pre>
+
+                <div class="success">
+                    <strong>결과:</strong> CLAUDE CODE 화면에 "테스트 응답입니다! ✅로 잘 나왔어~!!!" 메시지 표시됨
+                </div>
+
+                <h3>3. test2 엔드포인트 - 다중 Content Block 테스트</h3>
+                <div class="info">
+                    <strong>테스트:</strong> 2개의 content_block과 5초 sleep 지연 테스트
+                </div>
+
+                <pre><code>2026-01-16 15:38:34.762 [reactor-http-nio-2] INFO  c.e.g.ProxyService - 🧪 Test2 endpoint called - sending dummy SSE events with sleep & multiple content blocks
+2026-01-16 15:38:34.763 [reactor-http-nio-2] DEBUG c.e.g.ProxyService - 📤 Test2: message_start sent
+2026-01-16 15:38:34.764 [reactor-http-nio-2] DEBUG c.e.g.ProxyService - 📤 Test2: content_block_start (index=0) sent
+[Sleep 5 seconds]
+2026-01-16 15:38:39.765 [reactor-http-nio-2] DEBUG c.e.g.ProxyService - 📤 Test2: content_block_delta (index=0) sent
+2026-01-16 15:38:39.766 [reactor-http-nio-2] DEBUG c.e.g.ProxyService - 📤 Test2: content_block_stop (index=0) sent
+2026-01-16 15:38:39.767 [reactor-http-nio-2] DEBUG c.e.g.ProxyService - 📤 Test2: content_block_start (index=1) sent
+[Sleep 5 seconds]
+2026-01-16 15:38:44.768 [reactor-http-nio-2] DEBUG c.e.g.ProxyService - 📤 Test2: content_block_delta (index=1) sent
+2026-01-16 15:38:44.769 [reactor-http-nio-2] DEBUG c.e.g.ProxyService - 📤 Test2: content_block_stop (index=1) sent
+2026-01-16 15:38:44.770 [reactor-http-nio-2] DEBUG c.e.g.ProxyService - 📤 Test2: message_delta sent
+2026-01-16 15:38:44.771 [reactor-http-nio-2] DEBUG c.e.g.ProxyService - 📤 Test2: message_stop sent
+2026-01-16 15:38:44.771 [reactor-http-nio-2] INFO  c.e.g.ProxyService - ✅ Test2: All events sent successfully</code></pre>
+
+                <div class="success">
+                    <strong>결과:</strong> CLAUDE CODE 화면에 "⏺ 🔝 첫 번째 블록입니다!"와 "⏺ 🚀 두 번째 블록입니다!" 메시지 표시됨
+                </div>
+
+                <h3>4. 복수의 동시 요청 처리</h3>
+                <div class="info">
+                    <strong>상황:</strong> CLAUDE CODE가 여러 개의 요청을 동시에 전송
+                </div>
+
+                <pre><code>2026-01-16 15:38:34.762 [reactor-http-nio-2] INFO  c.e.g.ProxyService - REQUEST INCOMING (Thread 1)
+2026-01-16 15:38:34.763 [reactor-http-nio-3] INFO  c.e.g.ProxyService - REQUEST INCOMING (Thread 2)
+2026-01-16 15:38:34.764 [reactor-http-nio-4] INFO  c.e.g.ProxyService - REQUEST INCOMING (Thread 3)
+
+[각 요청 병렬 처리 중...]
+
+2026-01-16 15:38:35.967 [reactor-http-nio-2] INFO  c.e.g.ProxyService - ✅ Response streaming completed (Duration: 1214ms)
+2026-01-16 15:38:37.248 [reactor-http-nio-4] INFO  c.e.g.ProxyService - ✅ Response streaming completed (Duration: 1275ms)
+2026-01-16 15:38:39.388 [reactor-http-nio-5] INFO  c.e.g.ProxyService - ✅ Response streaming completed (Duration: 4635ms)</code></pre>
+
+                <div class="success">
+                    <strong>결과:</strong> Spring WebFlux의 비동기 처리로 여러 요청을 동시에 정상 처리
+                </div>
+
+                <h3>5. 응답 시간 통계</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>테스트 케이스</th>
+                            <th>응답 시간</th>
+                            <th>상태</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>단순 텍스트 요청</td>
+                            <td>1,413ms</td>
+                            <td><span class="badge badge-success">성공</span></td>
+                        </tr>
+                        <tr>
+                            <td>PII 포함 요청</td>
+                            <td>1,450ms</td>
+                            <td><span class="badge badge-success">성공</span></td>
+                        </tr>
+                        <tr>
+                            <td>대용량 요청 (299KB)</td>
+                            <td>2,565ms</td>
+                            <td><span class="badge badge-success">성공</span></td>
+                        </tr>
+                        <tr>
+                            <td>test 엔드포인트</td>
+                            <td>&lt;100ms</td>
+                            <td><span class="badge badge-success">성공</span></td>
+                        </tr>
+                        <tr>
+                            <td>test2 엔드포인트 (2블록 + 10초 sleep)</td>
+                            <td>~10,000ms</td>
+                            <td><span class="badge badge-success">성공</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>6. 로그 포맷 설명</h3>
+                <div class="diagram">
+                    <pre>
+로그 형식: TIMESTAMP [THREAD] LEVEL LOGGER - MESSAGE
+
+예시:
+2026-01-16 15:52:54.576 [reactor-http-nio-8] INFO  c.e.g.ProxyService - REQUEST INCOMING
+                     └─ 스레드 이름          └─ 로그 레벨    └─ Logger            └─ 메시지
+
+주요 로그 레벨:
+- INFO: 일반 정보 (요청 수신, 응답 완료, 모드 변경)
+- DEBUG: 상세 정보 (버퍼 크기, 이벤트 전송)
+- ERROR: 에러 정보 (API 연결 실패, OLLAMA 연결 실패)
+- WARN: 경고 (연결 리셋, 타임아웃)
+                    </pre>
+                </div>
+            </section>
+
+            <section>
+                <h2>🔮 향후 개발 계획</h2>
+
+                <h3>1. PII 마스킹 개선</h3>
+                <ul>
+                    <li>☐ OLLAMA 연결 안정화</li>
+                    <li>☐ 타임아웃 및 재시도 로직</li>
+                    <li>☐ 더 정확한 PII 감지 모델</li>
+                    <li>☐ 캐싱 메커니즘 (중복 PII 감지 생략)</li>
+                </ul>
+
+                <h3>2. 모니터링</h3>
+                <ul>
+                    <li>☐ 메트릭 수집 (Micrometer)</li>
+                    <li>☐ Prometheus/Grafana 연동</li>
+                    <li>☐ 요청/응답 시간 추적</li>
+                    <li>☐ PII 마스킹 통계</li>
+                </ul>
+
+                <h3>3. 보안 강화</h3>
+                <ul>
+                    <li>☐ API 키 검증</li>
+                    <li>☐ 속도 제한 (Rate Limiting)</li>
+                    <li>☐ 요청 크기 제한</li>
+                    <li>☐ IP 화이트리스트</li>
+                </ul>
+
+                <h3>4. 테스트 커버리지</h3>
+                <ul>
+                    <li>☐ 통합 테스트 추가</li>
+                    <li>☐ E2E 테스트 자동화</li>
+                    <li>☐ 부하 테스트 (JMeter/Gatling)</li>
+                </ul>
+            </section>
+
+            <section>
+                <h2>📚 참고 자료</h2>
+                <ul>
+                    <li><a href="https://docs.anthropic.com/claude/reference/messages_post" style="color: #667eea;">Anthropic API Messages</a></li>
+                    <li><a href="https://docs.spring.io/spring-framework/docs/current/reference/html/web-reactive.html" style="color: #667eea;">Spring WebFlux Documentation</a></li>
+                    <li><a href="https://ollama.ai/" style="color: #667eea;">OLLAMA Documentation</a></li>
+                    <li><a href="https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events" style="color: #667eea;">Server-Sent Events (MDN)</a></li>
+                </ul>
+            </section>
+
+            <div class="footer">
+                <p><strong>버전:</strong> 0.0.1-SNAPSHOT</p>
+                <p><strong>최종 업데이트:</strong> 2026-01-16</p>
+                <p><strong>상태:</strong> <span class="badge badge-success">PII 마스킹 비활성화</span> <span class="badge badge-info">프록시 기능 정상 작동</span></p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

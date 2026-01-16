@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CLAUDE CODE Proxy 서버 데이터 흐름 분석</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+            margin-bottom: 30px;
+        }
+
+        h2 {
+            color: #34495e;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            padding-left: 10px;
+            border-left: 4px solid #3498db;
+        }
+
+        h3 {
+            color: #555;
+            margin-top: 25px;
+            margin-bottom: 15px;
+        }
+
+        .architecture {
+            background: #ecf0f1;
+            padding: 30px;
+            border-radius: 8px;
+            text-align: center;
+            margin: 30px 0;
+            font-family: 'Courier New', monospace;
+        }
+
+        .flow-diagram {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin: 20px 0;
+        }
+
+        .flow-box {
+            background: #3498db;
+            color: white;
+            padding: 15px 25px;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+
+        .flow-arrow {
+            font-size: 24px;
+            color: #7f8c8d;
+        }
+
+        .code-block {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 20px;
+            border-radius: 5px;
+            overflow-x: auto;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .code-block .comment {
+            color: #95a5a6;
+        }
+
+        .code-block .key {
+            color: #e74c3c;
+        }
+
+        .code-block .string {
+            color: #2ecc71;
+        }
+
+        .code-block .number {
+            color: #f39c12;
+        }
+
+        .info-box {
+            background: #d5f4e6;
+            border-left: 4px solid #27ae60;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+
+        .warning-box {
+            background: #ffeaa7;
+            border-left: 4px solid #fdcb6e;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+
+        .error-box {
+            background: #fab1a0;
+            border-left: 4px solid #e74c3c;
+            padding: 15px 20px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background: #34495e;
+            color: white;
+            font-weight: bold;
+        }
+
+        tr:hover {
+            background: #f5f5f5;
+        }
+
+        .check-list {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .check-list li {
+            padding: 10px 0;
+            padding-left: 30px;
+            position: relative;
+        }
+
+        .check-list li:before {
+            content: '✓';
+            position: absolute;
+            left: 0;
+            color: #27ae60;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        .cross-list {
+            list-style: none;
+            padding-left: 0;
+        }
+
+        .cross-list li {
+            padding: 10px 0;
+            padding-left: 30px;
+            position: relative;
+        }
+
+        .cross-list li:before {
+            content: '✗';
+            position: absolute;
+            left: 0;
+            color: #e74c3c;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        .timestamp {
+            color: #7f8c8d;
+            font-size: 0.9em;
+            font-family: 'Courier New', monospace;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+
+        .badge-success {
+            background: #27ae60;
+            color: white;
+        }
+
+        .badge-warning {
+            background: #f39c12;
+            color: white;
+        }
+
+        .badge-info {
+            background: #3498db;
+            color: white;
+        }
+
+        .section {
+            margin: 30px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        ul {
+            margin-left: 20px;
+        }
+
+        li {
+            margin: 8px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>CLAUDE CODE Proxy 서버 데이터 흐름 분석</h1>
+
+        <div class="info-box">
+            <strong>개요:</strong> 본 문서는 Spring Boot로 구현된 Proxy 서버를 통해 CLAUDE CODE가 API 요청을 보내고 응답을 받는 전체 데이터 흐름을 실제 로그를 통해 분석한 것이다.
+        </div>
+
+        <h2>아키텍처</h2>
+        <div class="architecture">
+            <div class="flow-diagram">
+                <div class="flow-box">CLAUDE CODE<br>(Client)</div>
+                <div class="flow-arrow">⇄</div>
+                <div class="flow-box">Proxy 서버<br>(localhost:8080)</div>
+                <div class="flow-arrow">⇄</div>
+                <div class="flow-box">api.z.ai<br>(실제 서버)</div>
+            </div>
+            <p style="margin-top: 20px; color: #7f8c8d;">로깅 및 포워딩 처리</p>
+        </div>
+
+        <h2>실제 요청 분석</h2>
+
+        <div class="section">
+            <h3>1. 사용자 입력</h3>
+            <div class="code-block">
+"지금 너의 claude는 proxy를 통해서 체크중이야"
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>2. CLAUDE CODE → Proxy 서버 (Request)</h3>
+
+            <h4>HTTP Request 정보</h4>
+            <div class="code-block">
+<span class="comment">POST /v1/messages?beta=true HTTP/1.1</span>
+<span class="key">Host:</span> localhost:8080
+<span class="key">Accept:</span> application/json
+<span class="key">Content-Type:</span> application/json
+<span class="key">Authorization:</span> Bearer 53908b64385d4fb2a57aeea1720a4dac.1PfEj3H38GWVv20h
+<span class="key">User-Agent:</span> claude-cli/2.1.2 (external, cli)
+<span class="key">x-stainless-helper-method:</span> stream
+<span class="key">x-stainless-runtime:</span> node
+<span class="key">x-stainless-runtime-version:</span> v24.3.0
+<span class="key">x-app:</span> cli
+<span class="key">x-stainless-arch:</span> arm64
+<span class="key">x-stainless-lang:</span> js
+<span class="key">x-stainless-os:</span> MacOS
+<span class="key">x-stainless-package-version:</span> 0.70.0
+<span class="key">x-stainless-timeout:</span> 3000
+<span class="key">anthropic-version:</span> 2023-06-01
+<span class="key">anthropic-beta:</span> claude-code-20250219,interleaved-thinking-2025-05-14
+<span class="key">Connection:</span> keep-alive
+<span class="key">Content-Length:</span> 918
+            </div>
+
+            <h4>Request Body (JSON)</h4>
+            <div class="code-block">
+{
+  <span class="key">"model"</span>: <span class="string">"claude-haiku-4-5-20251001"</span>,
+  <span class="key">"messages"</span>: [
+    {
+      <span class="key">"role"</span>: <span class="string">"user"</span>,
+      <span class="key">"content"</span>: [
+        {
+          <span class="key">"type"</span>: <span class="string">"text"</span>,
+          <span class="key">"text"</span>: <span class="string">"지금 너의 claude는 proxy를 통해서 체크중이야"</span>
+        }
+      ]
+    }
+  ],
+  <span class="key">"system"</span>: [
+    {
+      <span class="key">"type"</span>: <span class="string">"text"</span>,
+      <span class="key">"text"</span>: <span class="string">"You are Claude Code..."</span>
+    }
+  ],
+  <span class="key">"tools"</span>: [],
+  <span class="key">"metadata"</span>: {
+    <span class="key">"user_id"</span>: <span class="string">"user_9911a7f2..."</span>
+  },
+  <span class="key">"max_tokens"</span>: <span class="number">32000</span>,
+  <span class="key">"stream"</span>: <span class="number">true</span>
+}
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>3. Proxy 서버 처리</h3>
+
+            <h4>로깅 정보</h4>
+            <div class="code-block">
+<span class="timestamp">[2026-01-16 09:47:22.667]</span> REQUEST INCOMING
+<span class="key">Timestamp:</span> 1768524442679
+<span class="key">Method:</span> POST
+<span class="key">Path:</span> /v1/messages
+<span class="key">Query:</span> {beta=[true]}
+            </div>
+
+            <h4>헤더 필터링</h4>
+            <p>Proxy 서버는 다음 헤더들을 제거하고 나머지만 전달:</p>
+            <ul class="cross-list">
+                <li><strong>Host:</strong> <code>localhost:8080</code> → 제거 (WebClient가 자동으로 <code>api.z.ai</code>로 설정)</li>
+                <li><strong>Content-Length:</strong> <code>918</code> → 제거 (WebClient가 자동으로 계산)</li>
+                <li><strong>Connection:</strong> <code>keep-alive</code> → 제거 (연결 관리는 WebClient가 담당)</li>
+            </ul>
+            <ul class="check-list">
+                <li><strong>Authorization:</strong> 전달</li>
+                <li><strong>Content-Type:</strong> 전달</li>
+                <li><strong>anthropic-*</strong>: 모든 Anthropic 관련 헤더 전달</li>
+            </ul>
+
+            <h4>포워딩</h4>
+            <div class="code-block">
+Forwarding to: https://api.z.ai/api/anthropic/v1/messages?beta=true
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>4. api.z.ai → Proxy 서버 (Response)</h3>
+
+            <h4>Response Headers</h4>
+            <div class="code-block">
+<span class="key">HTTP/1.1 200 OK</span>
+<span class="key">Server:</span> nginx
+<span class="key">Content-Type:</span> text/event-stream; charset=utf-8
+<span class="key">Transfer-Encoding:</span> chunked
+<span class="key">X-LOG-ID:</span> 20260116084723bc184d1424ba4056
+<span class="key">x-process-time:</span> 0.03499889373779297
+            </div>
+
+            <h4>Response Body (Server-Sent Events Stream)</h4>
+            <div class="code-block">
+<span class="key">event:</span> message_start
+<span class="key">data:</span> {"type": "message_start", "message": {"id": "msg_20260116084723bc184d1424ba4056"}}
+
+<span class="key">event:</span> content_block_start
+<span class="key">data:</span> {"type": "content_block_start", "index": 0, "content_block": {"type": "text"}}
+
+<span class="key">event:</span> content_block_delta
+<span class="key">data:</span> {"type": "content_block_delta", "delta": {"type": "text_delta", "text": "{\n    \""}}
+
+<span class="key">event:</span> content_block_delta
+<span class="key">data:</span> {"type": "content_block_delta", "delta": {"type": "text_delta", "text": "isNewTopic\": true"}}
+
+<span class="comment">... (더 많은 content_block_delta 이벤트) ...</span>
+
+<span class="key">event:</span> message_stop
+<span class="key">data:</span> {"type": "message_stop"}
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>5. Proxy 서버 로깅</h3>
+            <div class="code-block">
+<span class="timestamp">[2026-01-16 09:47:24.879]</span> RESPONSE FROM TARGET
+<span class="key">Status:</span> 200 OK <span class="badge badge-success">SUCCESS</span>
+<span class="key">Duration:</span> 2213ms <span class="badge badge-info">2.2s</span>
+            </div>
+        </div>
+
+        <h2>시간 분석</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>단계</th>
+                    <th>시간 (ms)</th>
+                    <th>비고</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Request 수신</td>
+                    <td>0</td>
+                    <td>시작</td>
+                </tr>
+                <tr>
+                    <td>Proxy 처리</td>
+                    <td>~10</td>
+                    <td>헤더 필터링, 로깅</td>
+                </tr>
+                <tr>
+                    <td>api.z.ai 응답 시간</td>
+                    <td>2203</td>
+                    <td>실제 API 처리 시간</td>
+                </tr>
+                <tr>
+                    <td><strong>총 소요 시간</strong></td>
+                    <td><strong>2213</strong></td>
+                    <td><strong>end-to-end</strong></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2>데이터 포맷</h2>
+
+        <h3>Request Format</h3>
+        <ul>
+            <li><strong>Type:</strong> HTTP POST</li>
+            <li><strong>Content-Type:</strong> application/json</li>
+            <li><strong>Body:</strong> JSON (model, messages, system, tools, metadata 등)</li>
+            <li><strong>Streaming:</strong> true (응답을 스트림으로 받음)</li>
+        </ul>
+
+        <h3>Response Format</h3>
+        <ul>
+            <li><strong>Type:</strong> Server-Sent Events (SSE)</li>
+            <li><strong>Content-Type:</strong> text/event-stream; charset=utf-8</li>
+            <li><strong>Format:</strong> Event-driven stream
+                <ul>
+                    <li><code>message_start</code>: 메시지 시작</li>
+                    <li><code>content_block_start</code>: 컨텐츠 블록 시작</li>
+                    <li><code>content_block_delta</code>: 컨텐츠 델타 (실제 텍스트)</li>
+                    <li><code>content_block_stop</code>: 컨텐츠 블록 종료</li>
+                    <li><code>message_delta</code>: 메시지 메타데이터 (usage 등)</li>
+                    <li><code>message_stop</code>: 메시지 종료</li>
+                </ul>
+            </li>
+        </ul>
+
+        <h2>Proxy 서버 핵심 기능</h2>
+
+        <div class="section">
+            <h3>1. 헤더 필터링</h3>
+            <div class="code-block">
+<span class="key">when</span> (key.lowercase()) {
+    <span class="string">"host"</span> -> {} <span class="comment">// 제거: WebClient가 자동으로 설정</span>
+    <span class="string">"content-length"</span> -> {} <span class="comment">// 제거: WebClient가 자동으로 계산</span>
+    <span class="string">"connection"</span> -> {} <span class="comment">// 제거: WebClient가 담당</span>
+    <span class="string">"transfer-encoding"</span> -> {} <span class="comment">// 제거: WebClient가 담당</span>
+    <span class="key">else</span> -> targetHeaders[key] = values <span class="comment">// 나머지는 전달</span>
+}
+            </div>
+        </div>
+
+        <div class="section">
+            <h3>2. 로깅</h3>
+            <ul class="check-list">
+                <li><strong>Request:</strong> 모든 헤더, 바디, 쿼리 파라미터</li>
+                <li><strong>Response:</strong> 상태 코드, 헤더, 바디, 소요 시간</li>
+                <li>Body가 2000자를 넘으면 자동으로 truncation</li>
+            </ul>
+        </div>
+
+        <h2>보안 고려사항</h2>
+
+        <div class="warning-box">
+            <strong>⚠️ Authorization Token 노출</strong><br>
+            실제 로그에 token이 그대로 노출됨:<br>
+            <code>"authorization": "[Bearer 53908b64385d4fb2a57aeea1720a4dac.1PfEj3H38GWVv20h]"</code><br>
+            <strong>운영 환경에서는 token 마스킹 필요</strong>
+        </div>
+
+        <h2>성능 지표</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>메트릭</th>
+                    <th>값</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>평균 응답 시간</td>
+                    <td>~2.2초</td>
+                </tr>
+                <tr>
+                    <td>Request Body 크기</td>
+                    <td>918 bytes</td>
+                </tr>
+                <tr>
+                    <td>Response Body 크기</td>
+                    <td>~1.5 KB (SSE stream)</td>
+                </tr>
+                <tr>
+                    <td>Input Tokens</td>
+                    <td>53</td>
+                </tr>
+                <tr>
+                    <td>Output Tokens</td>
+                    <td>40</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2>결론</h2>
+        <div class="info-box">
+            <p>Proxy 서버가 성공적으로:</p>
+            <ul class="check-list">
+                <li>모든 Request를 로깅</li>
+                <li>헤더를 적절히 필터링하여 403 에러 해결</li>
+                <li>실제 서버로 안전하게 포워딩</li>
+                <li>모든 Response를 로깅</li>
+                <li>스트리밍 응답 처리</li>
+                <li>end-to-end latency 측정</li>
+            </ul>
+            <p style="margin-top: 15px; font-size: 18px; font-weight: bold;">
+                ✅ 총 처리 시간: 2.2초 (API 서버 처리 시간 포함)
+            </p>
+        </div>
+    </div>
+</body>
+</html>
